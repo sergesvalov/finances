@@ -17,7 +17,7 @@ services:
     build: ./backend
     restart: always
     ports:
-      - "8000:8000"
+      - "7051:7051"
     environment:
       - DATABASE_URL=postgresql://finances_user:finances_password@db:5432/finances_db
     depends_on:
