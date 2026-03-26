@@ -126,11 +126,25 @@ EOF
             }
         }
 
-        stage('Health Check') {
+        stage('Health Check & Logs') {
             steps {
                 script {
-                    echo "Verifying application availability..."
+                    echo "Verifying application availability and fetching logs..."
                     sleep 10
+                    
+                    sshagent(credentials: [SSH_CREDS_ID]) {
+                        sh """
+                            ssh -o StrictHostKeyChecking=no ${SERVER_USER}@${DEPLOY_SERVER_IP} '
+                                cd ${PROJECT_DIR}
+                                echo ">>> Container Status:"
+                                sudo docker compose ps
+                                
+                                echo ">>> Container Logs (last 100 lines):"
+                                sudo docker compose logs --tail=100
+                            '
+                        """
+                    }
+                    
                     // Проверяем health эндпоинт фронта и бэкенда (через Nginx)
                     sh "curl -f -s http://${DEPLOY_SERVER_IP}:${HOST_PORT}/api/health || echo 'Warning: Backend API might not be ready'"
                 }
