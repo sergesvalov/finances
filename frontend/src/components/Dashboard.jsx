@@ -105,6 +105,7 @@ const Dashboard = () => {
           <p className="text-muted">No transactions found for the selected period.</p>
         </div>
       ) : (
+        <>
         <div className="dashboard-grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
           <div className="card chart-card">
             <h3 style={{ marginBottom: '1.5rem' }}>Spending by Category</h3>
@@ -154,6 +155,25 @@ const Dashboard = () => {
             </div>
           </div>
         </div>
+
+        <div className="card" style={{ marginTop: '1.5rem' }}>
+          <h3 style={{ marginBottom: '1rem' }}>Category Breakdown</h3>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
+            {[...data.category_spending].sort((a, b) => b.value - a.value).map((cat, index) => {
+              const originalIndex = data.category_spending.findIndex(c => c.name === cat.name);
+              return (
+                <div key={cat.name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem', backgroundColor: 'rgba(255,255,255,0.02)', borderRadius: '0.5rem', border: '1px solid var(--border-color)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                    <div style={{ width: '12px', height: '12px', borderRadius: '50%', backgroundColor: COLORS[originalIndex % COLORS.length] }}></div>
+                    <span style={{ fontWeight: '500' }}>{cat.name}</span>
+                  </div>
+                  <span style={{ fontWeight: '600' }}>€{cat.value.toFixed(2)}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+        </>
       )}
     </div>
   );
