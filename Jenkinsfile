@@ -24,7 +24,7 @@ pipeline {
         
         // 6. Application Parameters
         PROJECT_DIR    = "/opt/finances"
-        HOST_PORT      = "80"              // Порт для внешнего доступа к фронтенду
+        HOST_PORT      = "7050"            // Порт для внешнего доступа к фронтенду
     }
 
     stages {
