@@ -1,11 +1,12 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, NavLink } from 'react-router-dom';
-import { LayoutDashboard, FileUp, List, Settings as SettingsIcon } from 'lucide-react';
+import { LayoutDashboard, FileUp, List, Settings as SettingsIcon, Tags } from 'lucide-react';
 
 import Dashboard from './components/Dashboard';
 import UploadStatement from './components/UploadStatement';
 import TransactionList from './components/TransactionList';
 import Settings from './components/Settings';
+import Categories from './components/Categories';
 
 function App() {
   return (
@@ -33,6 +34,11 @@ function App() {
             Upload
           </NavLink>
 
+          <NavLink to="/categories" className={({isActive}) => isActive ? "nav-link active" : "nav-link"}>
+            <Tags size={20} />
+            Categories
+          </NavLink>
+
           <NavLink to="/settings" className={({isActive}) => isActive ? "nav-link active" : "nav-link"}>
             <SettingsIcon size={20} />
             Administration
@@ -45,6 +51,7 @@ function App() {
             <Route path="/" element={<Dashboard />} />
             <Route path="/transactions" element={<TransactionList />} />
             <Route path="/upload" element={<UploadStatement />} />
+            <Route path="/categories" element={<Categories />} />
             <Route path="/settings" element={<Settings />} />
           </Routes>
         </main>
