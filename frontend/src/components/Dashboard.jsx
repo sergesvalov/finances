@@ -150,52 +150,72 @@ const Dashboard = () => {
       <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h1 className="page-title">Dashboard</h1>
         
-        {data.available_months && data.available_months.length > 0 && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <Calendar size={20} color="var(--text-muted)" />
-            <select 
-              value={selectedMonth} 
-              onChange={(e) => setSelectedMonth(e.target.value)}
-              style={{
-                backgroundColor: 'var(--card-bg)',
-                color: 'var(--text-main)',
-                border: '1px solid var(--border-color)',
-                padding: '0.5rem 1rem',
-                borderRadius: '0.5rem',
-                fontSize: '0.875rem',
-                outline: 'none',
-                cursor: 'pointer'
-              }}
-            >
-              <option value="">All Time</option>
-              {data.available_months.map(m => (
-                <option key={m} value={m}>{m}</option>
-              ))}
-            </select>
-          </div>
-        )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          {data.available_months && data.available_months.length > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <Calendar size={20} color="var(--text-muted)" />
+              <select 
+                value={selectedMonth} 
+                onChange={(e) => setSelectedMonth(e.target.value)}
+                style={{
+                  backgroundColor: 'var(--card-bg)',
+                  color: 'var(--text-main)',
+                  border: '1px solid var(--border-color)',
+                  padding: '0.5rem 1rem',
+                  borderRadius: '0.5rem',
+                  fontSize: '0.875rem',
+                  outline: 'none',
+                  cursor: 'pointer'
+                }}
+              >
+                <option value="">All Time</option>
+                {data.available_months.map(m => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
+              </select>
+            </div>
+          )}
+          <button 
+             onClick={handleSendTelegramReport} 
+             disabled={sendingReport}
+             className="btn btn-primary" 
+             style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem', fontSize: '0.875rem' }}>
+            <Send size={16} />
+            {sendingReport ? 'Sending...' : 'Send Telegram Report'}
+          </button>
+        </div>
       </div>
 
       {loading && <div style={{ textAlign: 'center', color: 'var(--text-muted)', marginBottom: '1rem' }}>Updating data...</div>}
 
-      <div className="dashboard-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))' }}>
+      <div className="dashboard-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
         <div className="card" style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
            <div style={{ backgroundColor: 'rgba(99, 102, 241, 0.1)', padding: '1rem', borderRadius: '50%' }}>
              <Wallet color="var(--primary)" size={32} />
            </div>
            <div>
-             <p className="text-muted" style={{ fontSize: '0.875rem', fontWeight: '500' }}>Balance (End of Period)</p>
-             <h2 style={{ fontSize: '2rem', margin: 0 }}>€{currentBalance.toFixed(2)}</h2>
+             <p className="text-muted" style={{ fontSize: '0.875rem', fontWeight: '500' }}>Balance</p>
+             <h2 style={{ fontSize: '1.75rem', margin: 0 }}>€{currentBalance.toFixed(2)}</h2>
            </div>
         </div>
         
         <div className="card" style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
-           <div style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', padding: '1rem', borderRadius: '50%' }}>
-             <Activity color="var(--danger)" size={32} />
+           <div style={{ backgroundColor: 'rgba(16, 185, 129, 0.1)', padding: '1rem', borderRadius: '50%' }}>
+             <ArrowUpRight color="var(--success)" size={32} />
            </div>
            <div>
-             <p className="text-muted" style={{ fontSize: '0.875rem', fontWeight: '500' }}>Total Spent (Period)</p>
-             <h2 style={{ fontSize: '2rem', margin: 0 }}>€{totalSpent.toFixed(2)}</h2>
+             <p className="text-muted" style={{ fontSize: '0.875rem', fontWeight: '500' }}>Total Income</p>
+             <h2 style={{ fontSize: '1.75rem', margin: 0 }}>€{(data.total_income || 0).toFixed(2)}</h2>
+           </div>
+        </div>
+
+        <div className="card" style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
+           <div style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', padding: '1rem', borderRadius: '50%' }}>
+             <ArrowDownRight color="var(--danger)" size={32} />
+           </div>
+           <div>
+             <p className="text-muted" style={{ fontSize: '0.875rem', fontWeight: '500' }}>Total Expenses</p>
+             <h2 style={{ fontSize: '1.75rem', margin: 0 }}>€{totalSpent.toFixed(2)}</h2>
            </div>
         </div>
       </div>
@@ -259,14 +279,6 @@ const Dashboard = () => {
         <div className="card" style={{ marginTop: '1.5rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
             <h3 style={{ margin: 0 }}>Category Breakdown</h3>
-            <button 
-               onClick={handleSendTelegramReport} 
-               disabled={sendingReport}
-               className="btn btn-primary" 
-               style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem', fontSize: '0.875rem' }}>
-              <Send size={16} />
-              {sendingReport ? 'Sending...' : 'Send to Telegram'}
-            </button>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
             {[...data.category_spending].sort((a, b) => b.value - a.value).map((cat, index) => {

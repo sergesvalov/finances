@@ -77,10 +77,20 @@ def get_analytics_summary(month: Optional[str] = Query(None), db: Session = Depe
     if uncat_total:
          category_spending.append({"name": "Uncategorized", "value": abs(float(uncat_total))})
          
+    # Total Income
+    income_query = db.query(func.sum(Transaction.amount).label("total")) \
+        .filter(Transaction.amount > 0)
+        
+    if start_date and end_date:
+        income_query = income_query.filter(Transaction.execution_date >= start_date, Transaction.execution_date <= end_date)
+        
+    total_income = income_query.scalar() or 0.0
+         
     return {
         "available_months": available_months,
         "category_spending": category_spending,
-        "balance_dynamics": balance_dynamics
+        "balance_dynamics": balance_dynamics,
+        "total_income": float(total_income)
     }
 
 class ReportRequest(BaseModel):
@@ -100,14 +110,22 @@ def send_telegram_report(req: ReportRequest, db: Session = Depends(get_db)):
     month_str = req.month if req.month else "All Time"
     
     total_spent = sum(item["value"] for item in data.get("category_spending", []))
+    total_income = data.get("total_income", 0.0)
     
-    lines = [f"📊 <b>Finance Report ({month_str})</b>", ""]
-    lines.append(f"Total Spent: <b>€{total_spent:.2f}</b>")
+    current_balance = 0.0
+    if len(data.get("balance_dynamics", [])) > 0:
+         current_balance = data["balance_dynamics"][-1]["balance"]
+    
+    lines = [f"📊 <b>Monthly Finance Report ({month_str})</b>", ""]
+    lines.append(f"🟢 <b>Income:</b> +€{total_income:.2f}")
+    lines.append(f"🔴 <b>Expenses:</b> -€{total_spent:.2f}")
+    lines.append(f"💳 <b>Current Balance:</b> €{current_balance:.2f}")
     lines.append("")
+    lines.append("🗂 <b>Category Breakdown (Expenses):</b>")
     
     spending = sorted(data.get("category_spending", []), key=lambda x: x["value"], reverse=True)
     for item in spending:
-        lines.append(f"🔹 {item['name']}: €{item['value']:.2f}")
+        lines.append(f"  🔹 {item['name']}: €{item['value']:.2f}")
         
     message = "\n".join(lines)
     url = f"https://api.telegram.org/bot{token_setting.value}/sendMessage"
