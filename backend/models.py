@@ -2,6 +2,12 @@ from sqlalchemy import Column, Integer, String, Numeric, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
 from database import Base
 
+class Setting(Base):
+    __tablename__ = "settings"
+
+    key = Column(String, primary_key=True, index=True)
+    value = Column(String)
+
 class Category(Base):
     __tablename__ = "categories"
 
