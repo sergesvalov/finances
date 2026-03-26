@@ -280,20 +280,26 @@ const Dashboard = () => {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
             <h3 style={{ margin: 0 }}>Category Breakdown</h3>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
-            {[...data.category_spending].sort((a, b) => b.value - a.value).map((cat, index) => {
-              const originalIndex = data.category_spending.findIndex(c => c.name === cat.name);
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1rem' }}>
+            {[...data.category_spending].sort((a, b) => b.value - a.value).map((group, index) => {
+              const originalIndex = data.category_spending.findIndex(c => c.name === group.name);
+              const color = COLORS[originalIndex % COLORS.length];
+              
               return (
-                <div 
-                  key={cat.name} 
-                  onClick={() => handleCategoryClick(cat.name)}
-                  className="category-card"
-                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem', backgroundColor: 'rgba(255,255,255,0.02)', borderRadius: '0.5rem', border: '1px solid var(--border-color)', cursor: 'pointer' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                    <div style={{ width: '12px', height: '12px', borderRadius: '50%', backgroundColor: COLORS[originalIndex % COLORS.length] }}></div>
-                    <span style={{ fontWeight: '500' }}>{cat.name}</span>
+                <div key={group.name} className="card" style={{ padding: '1rem', borderTop: `4px solid ${color}` }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '0.5rem' }}>
+                    <h4 style={{ margin: 0, fontSize: '1.1rem' }}>{group.name}</h4>
+                    <span style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>€{group.value.toFixed(2)}</span>
                   </div>
-                  <span style={{ fontWeight: '600' }}>€{cat.value.toFixed(2)}</span>
+                  
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                    {group.subcategories && group.subcategories.map(sub => (
+                       <div key={sub.name} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem', color: 'var(--text-muted)' }}>
+                          <span>{sub.name}</span>
+                          <span style={{ color: 'var(--text-main)' }}>€{sub.value.toFixed(2)}</span>
+                       </div>
+                    ))}
+                  </div>
                 </div>
               );
             })}

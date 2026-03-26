@@ -62,20 +62,34 @@ def get_analytics_summary(month: Optional[str] = Query(None), db: Session = Depe
         
     cat_query = cat_query.group_by(Category.name).all()
         
+    raw_categories = []
     for name, total in cat_query:
-        category_spending.append({"name": name, "value": abs(float(total))})
+        raw_categories.append({"name": name, "value": abs(float(total))})
 
-    # Uncategorized spending
-    uncat_query = db.query(func.sum(Transaction.amount).label("total")) \
-        .filter(Transaction.amount < 0, Transaction.category_id == None)
-        
-    if start_date and end_date:
-        uncat_query = uncat_query.filter(Transaction.execution_date >= start_date, Transaction.execution_date <= end_date)
-        
-    uncat_total = uncat_query.scalar()
-        
     if uncat_total:
-         category_spending.append({"name": "Uncategorized", "value": abs(float(uncat_total))})
+         raw_categories.append({"name": "Uncategorized", "value": abs(float(uncat_total))})
+         
+    def get_group(cat_name):
+        if cat_name == "Uncategorized": return "Uncategorized"
+        cat = cat_name.lower().strip()
+        if cat in ["delivery", "smart", "proteas bakery", "sklavenitis", "food", "supermarket", "groceries", "restaurants", "cafe"]:
+            return "Food"
+        elif cat in ["phone", "internet", "car gas", "bills", "utilities", "gas", "electricity", "water", "rent"]:
+            return "Bills"
+        else:
+            return "Other expenses"
+            
+    grouped = {}
+    for item in raw_categories:
+        g = get_group(item["name"])
+        if g not in grouped:
+            grouped[g] = {"name": g, "value": 0.0, "subcategories": []}
+        grouped[g]["value"] += item["value"]
+        grouped[g]["subcategories"].append({"name": item["name"], "value": item["value"]})
+        
+    category_spending = list(grouped.values())
+    for group in category_spending:
+        group["subcategories"] = sorted(group["subcategories"], key=lambda x: x["value"], reverse=True)
          
     # Total Income
     income_query = db.query(func.sum(Transaction.amount).label("total")) \
@@ -121,11 +135,13 @@ def send_telegram_report(req: ReportRequest, db: Session = Depends(get_db)):
     lines.append(f"🔴 <b>Expenses:</b> -€{total_spent:.2f}")
     lines.append(f"💳 <b>Current Balance:</b> €{current_balance:.2f}")
     lines.append("")
-    lines.append("🗂 <b>Category Breakdown (Expenses):</b>")
     
     spending = sorted(data.get("category_spending", []), key=lambda x: x["value"], reverse=True)
-    for item in spending:
-        lines.append(f"  🔹 {item['name']}: €{item['value']:.2f}")
+    for group in spending:
+        lines.append(f"📁 <b>{group['name']}</b>: €{group['value']:.2f}")
+        for sub in group.get("subcategories", []):
+            lines.append(f"   🔹 {sub['name']}: €{sub['value']:.2f}")
+        lines.append("")
         
     message = "\n".join(lines)
     url = f"https://api.telegram.org/bot{token_setting.value}/sendMessage"
