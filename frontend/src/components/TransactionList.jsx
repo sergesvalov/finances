@@ -10,6 +10,45 @@ const TransactionList = () => {
   const [total, setTotal] = useState(0);
   const limit = 20;
 
+  const [categories, setCategories] = useState([]);
+  const [editingTxId, setEditingTxId] = useState(null);
+  const [categorySearch, setCategorySearch] = useState('');
+
+  // Fetch categories on mount
+  useEffect(() => {
+    api.get('/categories').then(res => setCategories(res.data)).catch(console.error);
+  }, []);
+
+  const handleUpdateCategory = async (txId, categoryId, categoryName) => {
+    try {
+      if (categoryId === null) {
+        await api.patch(`/transactions/${txId}/category`);
+      } else {
+        await api.patch(`/transactions/${txId}/category?category_id=${categoryId}`);
+      }
+      // Update local state
+      setTransactions(prev => prev.map(t => t.id === txId ? { ...t, category: categoryName } : t));
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setEditingTxId(null);
+      setCategorySearch('');
+    }
+  };
+
+  const handleCreateCategory = async (txId, newName) => {
+    try {
+      const res = await api.post('/categories', { name: newName });
+      const newCat = res.data;
+      if (!categories.find(c => c.id === newCat.id)) {
+        setCategories(prev => [...prev, newCat]);
+      }
+      handleUpdateCategory(txId, newCat.id, newCat.name);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   const fetchTransactions = async () => {
     try {
       setLoading(true);
@@ -73,15 +112,52 @@ const TransactionList = () => {
                     <tr key={t.id}>
                       <td>{formatDate(t.execution_date)}</td>
                       <td>{t.description}</td>
-                      <td>
-                        <span style={{ 
-                          backgroundColor: 'rgba(255,255,255,0.1)', 
-                          padding: '0.25rem 0.5rem', 
-                          borderRadius: '1rem',
-                          fontSize: '0.75rem'
-                        }}>
-                          {t.category || 'Uncategorized'}
-                        </span>
+                      <td style={{ position: 'relative' }}>
+                        {editingTxId === t.id ? (
+                          <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 50, backgroundColor: 'var(--card-bg)', border: '1px solid var(--border-color)', borderRadius: '0.5rem', padding: '0.5rem', width: '220px', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.5)' }}>
+                            <input 
+                              type="text" 
+                              autoFocus
+                              placeholder="Search or create..."
+                              value={categorySearch}
+                              onChange={(e) => setCategorySearch(e.target.value)}
+                              style={{ width: '100%', padding: '0.5rem', backgroundColor: 'rgba(255,255,255,0.05)', color: 'white', border: '1px solid var(--border-color)', borderRadius: '0.25rem', marginBottom: '0.5rem', outline: 'none' }}
+                            />
+                            <div style={{ maxHeight: '150px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                              {categories.filter(c => c.name.toLowerCase().includes(categorySearch.toLowerCase())).map(c => (
+                                <button key={c.id} onClick={() => handleUpdateCategory(t.id, c.id, c.name)} style={{ textAlign: 'left', padding: '0.5rem', background: 'none', border: 'none', color: 'var(--text-main)', cursor: 'pointer', borderRadius: '0.25rem' }} onMouseOver={e => e.target.style.backgroundColor = 'rgba(255,255,255,0.05)'} onMouseOut={e => e.target.style.backgroundColor = 'transparent'}>
+                                  {c.name}
+                                </button>
+                              ))}
+                              {categorySearch && !categories.some(c => c.name.toLowerCase() === categorySearch.toLowerCase()) && (
+                                <button onClick={() => handleCreateCategory(t.id, categorySearch)} style={{ textAlign: 'left', padding: '0.5rem', background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer', borderRadius: '0.25rem', fontWeight: 500 }} onMouseOver={e => e.target.style.backgroundColor = 'rgba(255,255,255,0.05)'} onMouseOut={e => e.target.style.backgroundColor = 'transparent'}>
+                                  + Create "{categorySearch}"
+                                </button>
+                              )}
+                              {t.category && (
+                                <button onClick={() => handleUpdateCategory(t.id, null, null)} style={{ textAlign: 'left', padding: '0.5rem', background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', borderRadius: '0.25rem', marginTop: '0.25rem', borderTop: '1px solid var(--border-color)' }} onMouseOver={e => e.target.style.backgroundColor = 'rgba(255,255,255,0.05)'} onMouseOut={e => e.target.style.backgroundColor = 'transparent'}>
+                                  Remove Category
+                                </button>
+                              )}
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
+                               <button onClick={() => setEditingTxId(null)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.75rem' }}>Cancel</button>
+                            </div>
+                          </div>
+                        ) : (
+                          <span 
+                            onClick={() => { setEditingTxId(t.id); setCategorySearch(''); }}
+                            style={{ 
+                              backgroundColor: 'rgba(255,255,255,0.1)', 
+                              padding: '0.25rem 0.5rem', 
+                              borderRadius: '1rem',
+                              fontSize: '0.75rem',
+                              cursor: 'pointer',
+                              display: 'inline-block'
+                            }}>
+                            {t.category || 'Uncategorized'}
+                          </span>
+                        )}
                       </td>
                       <td style={{ textAlign: 'right', fontWeight: '500' }} className={t.amount < 0 ? 'amount-negative' : 'amount-positive'}>
                         {t.amount > 0 ? '+' : ''}{t.amount.toFixed(2)} {t.currency}

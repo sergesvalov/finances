@@ -61,16 +61,21 @@ def get_transactions(
     }
 
 @router.patch("/{transaction_id}/category", response_model=dict)
-def update_category(transaction_id: int, category_id: int, db: Session = Depends(get_db)):
+def update_category(transaction_id: int, category_id: Optional[int] = None, db: Session = Depends(get_db)):
     tx = db.query(Transaction).filter(Transaction.id == transaction_id).first()
     if not tx:
         raise HTTPException(status_code=404, detail="Transaction not found")
         
-    cat = db.query(Category).filter(Category.id == category_id).first()
-    if not cat:
-        raise HTTPException(status_code=404, detail="Category not found")
+    if category_id is not None:
+        cat = db.query(Category).filter(Category.id == category_id).first()
+        if not cat:
+            raise HTTPException(status_code=404, detail="Category not found")
+        tx.category_id = category_id
+        cat_name = cat.name
+    else:
+        tx.category_id = None
+        cat_name = None
         
-    tx.category_id = category_id
     db.commit()
     
-    return {"message": "Category updated successfully", "category": cat.name}
+    return {"message": "Category updated successfully", "category": cat_name}
