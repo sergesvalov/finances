@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Legend } from 'recharts';
-import { ArrowUpRight, ArrowDownRight, Wallet, Activity, Calendar } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, Wallet, Activity, Calendar, X } from 'lucide-react';
 import api from '../api';
 
 const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#14b8a6'];
@@ -9,6 +9,10 @@ const Dashboard = () => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [selectedMonth, setSelectedMonth] = useState('');
+
+  const [selectedCategory, setSelectedCategory] = useState(null);
+  const [categoryTransactions, setCategoryTransactions] = useState([]);
+  const [loadingCategory, setLoadingCategory] = useState(false);
 
   useEffect(() => {
     const fetchAnalytics = async () => {
@@ -32,12 +36,27 @@ const Dashboard = () => {
 
   if (!data || (!data.category_spending.length && !data.balance_dynamics.length && !data.available_months.length)) {
     return (
-       <div style={{ textAlign: 'center', padding: '4rem 0' }}>
-         <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>No data available</h2>
-         <p className="text-muted">Upload a Revolut CSV statement to see your analytics.</p>
-       </div>
+        <div style={{ textAlign: 'center', padding: '4rem 0' }}>
+          <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>No data available</h2>
+          <p className="text-muted">Upload a Revolut CSV statement to see your analytics.</p>
+        </div>
     );
   }
+
+  const handleCategoryClick = async (categoryName) => {
+    setSelectedCategory(categoryName);
+    setLoadingCategory(true);
+    try {
+      const params = { category: categoryName, limit: 100 };
+      if (selectedMonth) params.month = selectedMonth;
+      const res = await api.get('/transactions', { params });
+      setCategoryTransactions(res.data.items);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingCategory(false);
+    }
+  };
 
   const currentBalance = data.balance_dynamics.length > 0 
     ? data.balance_dynamics[data.balance_dynamics.length - 1].balance
@@ -162,7 +181,11 @@ const Dashboard = () => {
             {[...data.category_spending].sort((a, b) => b.value - a.value).map((cat, index) => {
               const originalIndex = data.category_spending.findIndex(c => c.name === cat.name);
               return (
-                <div key={cat.name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem', backgroundColor: 'rgba(255,255,255,0.02)', borderRadius: '0.5rem', border: '1px solid var(--border-color)' }}>
+                <div 
+                  key={cat.name} 
+                  onClick={() => handleCategoryClick(cat.name)}
+                  className="category-card"
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem', backgroundColor: 'rgba(255,255,255,0.02)', borderRadius: '0.5rem', border: '1px solid var(--border-color)', cursor: 'pointer' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                     <div style={{ width: '12px', height: '12px', borderRadius: '50%', backgroundColor: COLORS[originalIndex % COLORS.length] }}></div>
                     <span style={{ fontWeight: '500' }}>{cat.name}</span>
@@ -174,6 +197,48 @@ const Dashboard = () => {
           </div>
         </div>
         </>
+      )}
+
+      {/* Category Breakdown Modal */}
+      {selectedCategory && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }} onClick={() => setSelectedCategory(null)}>
+          <div style={{ backgroundColor: 'var(--card-bg)', borderRadius: '1rem', width: '100%', maxWidth: '600px', maxHeight: '80vh', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)' }} onClick={e => e.stopPropagation()}>
+            <div style={{ padding: '1.5rem', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ margin: 0 }}>{selectedCategory} Transactions</h3>
+              <button onClick={() => setSelectedCategory(null)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
+                <X size={24} />
+              </button>
+            </div>
+            <div style={{ padding: '1.5rem', overflowY: 'auto', flex: 1 }}>
+              {loadingCategory ? (
+                <div style={{ textAlign: 'center', color: 'var(--text-muted)' }}>Loading transactions...</div>
+              ) : categoryTransactions.length === 0 ? (
+                 <div style={{ textAlign: 'center', color: 'var(--text-muted)' }}>No transactions found.</div>
+              ) : (
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
+                  <thead style={{ color: 'var(--text-muted)', borderBottom: '1px solid var(--border-color)' }}>
+                    <tr>
+                      <th style={{ textAlign: 'left', paddingBottom: '0.5rem', fontWeight: 500 }}>Date</th>
+                      <th style={{ textAlign: 'left', paddingBottom: '0.5rem', fontWeight: 500 }}>Description</th>
+                      <th style={{ textAlign: 'right', paddingBottom: '0.5rem', fontWeight: 500 }}>Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {categoryTransactions.map(t => (
+                      <tr key={t.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                        <td style={{ padding: '0.75rem 0', color: 'var(--text-muted)' }}>{t.execution_date.split('T')[0]}</td>
+                        <td style={{ padding: '0.75rem 0.5rem' }}>{t.description}</td>
+                        <td style={{ padding: '0.75rem 0', textAlign: 'right', fontWeight: 500, color: t.amount < 0 ? 'var(--text-main)' : 'var(--success)' }}>
+                          €{Math.abs(t.amount).toFixed(2)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

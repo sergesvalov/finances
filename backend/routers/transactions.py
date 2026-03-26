@@ -1,4 +1,6 @@
 from fastapi import APIRouter, Depends, Query, HTTPException
+from datetime import datetime
+import calendar
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from database import get_db
@@ -12,6 +14,8 @@ def get_transactions(
     skip: int = 0, 
     limit: int = 50, 
     search: Optional[str] = None,
+    category: Optional[str] = None,
+    month: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
     query = db.query(Transaction)
@@ -19,6 +23,22 @@ def get_transactions(
     if search:
         query = query.filter(Transaction.description.ilike(f"%{search}%"))
         
+    if category:
+        if category == "Uncategorized":
+            query = query.filter(Transaction.category_id == None)
+        else:
+            query = query.join(Category).filter(Category.name == category)
+            
+    if month:
+        try:
+            year, m = map(int, month.split('-'))
+            last_day = calendar.monthrange(year, m)[1]
+            start_date = datetime(year, m, 1)
+            end_date = datetime(year, m, last_day, 23, 59, 59)
+            query = query.filter(Transaction.execution_date >= start_date, Transaction.execution_date <= end_date)
+        except ValueError:
+            pass
+            
     total = query.count()
     transactions = query.order_by(Transaction.execution_date.desc()).offset(skip).limit(limit).all()
     
