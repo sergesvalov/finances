@@ -2,11 +2,14 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from database import get_db
-from models import Transaction, Category
+from models import Transaction, Category, Setting, TelegramRecipient
 import pandas as pd
 from typing import Optional
 from datetime import datetime
 import calendar
+import json
+import urllib.request
+from pydantic import BaseModel
 
 router = APIRouter(prefix="/api/analytics", tags=["Analytics"])
 
@@ -79,3 +82,54 @@ def get_analytics_summary(month: Optional[str] = Query(None), db: Session = Depe
         "category_spending": category_spending,
         "balance_dynamics": balance_dynamics
     }
+
+class ReportRequest(BaseModel):
+    month: Optional[str] = None
+
+@router.post("/report/telegram")
+def send_telegram_report(req: ReportRequest, db: Session = Depends(get_db)):
+    token_setting = db.query(Setting).filter(Setting.key == "telegram_bot_token").first()
+    if not token_setting or not token_setting.value:
+        raise HTTPException(status_code=400, detail="Telegram bot token not configured. Please set it in Administration.")
+        
+    recipients = db.query(TelegramRecipient).all()
+    if not recipients:
+        raise HTTPException(status_code=400, detail="No Telegram recipients configured. Please add them in Administration.")
+        
+    data = get_analytics_summary(month=req.month, db=db)
+    month_str = req.month if req.month else "All Time"
+    
+    total_spent = sum(item["value"] for item in data.get("category_spending", []))
+    
+    lines = [f"📊 <b>Finance Report ({month_str})</b>", ""]
+    lines.append(f"Total Spent: <b>€{total_spent:.2f}</b>")
+    lines.append("")
+    
+    spending = sorted(data.get("category_spending", []), key=lambda x: x["value"], reverse=True)
+    for item in spending:
+        lines.append(f"🔹 {item['name']}: €{item['value']:.2f}")
+        
+    message = "\n".join(lines)
+    url = f"https://api.telegram.org/bot{token_setting.value}/sendMessage"
+    
+    success_count = 0
+    from fastapi import HTTPException
+    for r in recipients:
+        payload = json.dumps({
+            "chat_id": r.telegram_id,
+            "text": message,
+            "parse_mode": "HTML"
+        }).encode("utf-8")
+        
+        try:
+            req_obj = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/json"})
+            with urllib.request.urlopen(req_obj) as response:
+                if response.getcode() == 200:
+                    success_count += 1
+        except Exception as e:
+            print(f"Failed to send to {r.telegram_id}: {e}")
+            
+    if success_count == 0:
+        raise HTTPException(status_code=500, detail="Failed to send report to any recipients. Check bot token and IDs.")
+        
+    return {"message": f"Report successfully sent to {success_count} recipients."}

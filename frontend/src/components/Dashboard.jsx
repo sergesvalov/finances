@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Legend } from 'recharts';
-import { ArrowUpRight, ArrowDownRight, Wallet, Activity, Calendar, X } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, Wallet, Activity, Calendar, X, Send } from 'lucide-react';
 import api from '../api';
 
 const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#14b8a6'];
@@ -13,6 +13,8 @@ const Dashboard = () => {
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [categoryTransactions, setCategoryTransactions] = useState([]);
   const [loadingCategory, setLoadingCategory] = useState(false);
+  
+  const [sendingReport, setSendingReport] = useState(false);
 
   const [categories, setCategories] = useState([]);
   const [editingTxId, setEditingTxId] = useState(null);
@@ -121,6 +123,19 @@ const Dashboard = () => {
       handleUpdateTransactionCategory(txId, newCat.id, newCat.name);
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const handleSendTelegramReport = async () => {
+    setSendingReport(true);
+    try {
+      const res = await api.post('/analytics/report/telegram', { month: selectedMonth });
+      alert(res.data.message);
+    } catch (err) {
+      console.error(err);
+      alert(err.response?.data?.detail || "Failed to send report");
+    } finally {
+      setSendingReport(false);
     }
   };
 
@@ -242,7 +257,17 @@ const Dashboard = () => {
         </div>
 
         <div className="card" style={{ marginTop: '1.5rem' }}>
-          <h3 style={{ marginBottom: '1rem' }}>Category Breakdown</h3>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+            <h3 style={{ margin: 0 }}>Category Breakdown</h3>
+            <button 
+               onClick={handleSendTelegramReport} 
+               disabled={sendingReport}
+               className="btn btn-primary" 
+               style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem', fontSize: '0.875rem' }}>
+              <Send size={16} />
+              {sendingReport ? 'Sending...' : 'Send to Telegram'}
+            </button>
+          </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
             {[...data.category_spending].sort((a, b) => b.value - a.value).map((cat, index) => {
               const originalIndex = data.category_spending.findIndex(c => c.name === cat.name);
