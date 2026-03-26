@@ -21,12 +21,26 @@ const TransactionList = () => {
 
   const handleUpdateCategory = async (txId, categoryId, categoryName) => {
     try {
+      let res;
       if (categoryId === null) {
-        await api.patch(`/transactions/${txId}/category`);
+        res = await api.patch(`/transactions/${txId}/category`);
       } else {
-        await api.patch(`/transactions/${txId}/category?category_id=${categoryId}`);
+        res = await api.patch(`/transactions/${txId}/category?category_id=${categoryId}`);
       }
-      // Update local state
+      
+      const { similar_count, description } = res.data;
+      
+      if (similar_count > 0) {
+        if (window.confirm(`Найдено ещё ${similar_count} позиций с описанием "${description}". Перенести их тоже в эту категорию?`)) {
+          await api.post('/transactions/bulk_category', { description, category_id: categoryId });
+          fetchTransactions();
+          setEditingTxId(null);
+          setCategorySearch('');
+          return;
+        }
+      }
+
+      // Update local state if single update
       setTransactions(prev => prev.map(t => t.id === txId ? { ...t, category: categoryName } : t));
     } catch (err) {
       console.error(err);

@@ -77,14 +77,29 @@ const Dashboard = () => {
 
   const handleUpdateTransactionCategory = async (txId, categoryId, categoryName) => {
     try {
+      let res;
       if (categoryId === null) {
-        await api.patch(`/transactions/${txId}/category`);
+        res = await api.patch(`/transactions/${txId}/category`);
       } else {
-        await api.patch(`/transactions/${txId}/category?category_id=${categoryId}`);
+        res = await api.patch(`/transactions/${txId}/category?category_id=${categoryId}`);
       }
       
-      // Update local transaction state
-      setCategoryTransactions(prev => prev.map(t => t.id === txId ? { ...t, category: categoryName } : t));
+      const { similar_count, description } = res.data;
+      
+      if (similar_count > 0) {
+        if (window.confirm(`Найдено ещё ${similar_count} позиций с описанием "${description}". Перенести их тоже в эту категорию?`)) {
+           await api.post('/transactions/bulk_category', { description, category_id: categoryId });
+           if (selectedCategory) {
+              const params = { category: selectedCategory, limit: 100 };
+              if (selectedMonth) params.month = selectedMonth;
+              api.get('/transactions', { params }).then(tr => setCategoryTransactions(tr.data.items));
+           }
+        } else {
+           setCategoryTransactions(prev => prev.map(t => t.id === txId ? { ...t, category: categoryName } : t));
+        }
+      } else {
+         setCategoryTransactions(prev => prev.map(t => t.id === txId ? { ...t, category: categoryName } : t));
+      }
       
       // Re-fetch analytics to perfectly reflect the change in charts & totals
       const params = selectedMonth ? { month: selectedMonth } : {};

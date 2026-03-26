@@ -6,6 +6,7 @@ from typing import List, Optional
 from database import get_db
 from models import Transaction, Category
 from schemas import Transaction as TransactionSchema
+from pydantic import BaseModel
 
 router = APIRouter(prefix="/api/transactions", tags=["Transactions"])
 
@@ -72,10 +73,39 @@ def update_category(transaction_id: int, category_id: Optional[int] = None, db: 
             raise HTTPException(status_code=404, detail="Category not found")
         tx.category_id = category_id
         cat_name = cat.name
+        similar_count = db.query(Transaction).filter(
+            Transaction.description == tx.description,
+            Transaction.id != tx.id,
+            (Transaction.category_id != category_id) | (Transaction.category_id.is_(None))
+        ).count()
     else:
         tx.category_id = None
         cat_name = None
+        similar_count = db.query(Transaction).filter(
+            Transaction.description == tx.description,
+            Transaction.id != tx.id,
+            Transaction.category_id != None
+        ).count()
         
     db.commit()
     
-    return {"message": "Category updated successfully", "category": cat_name}
+    return {"message": "Category updated successfully", "category": cat_name, "similar_count": similar_count, "description": tx.description}
+
+class BulkCategoryUpdate(BaseModel):
+    description: str
+    category_id: Optional[int] = None
+
+@router.post("/bulk_category", response_model=dict)
+def bulk_update_category(data: BulkCategoryUpdate, db: Session = Depends(get_db)):
+    if data.category_id is not None:
+        cat = db.query(Category).filter(Category.id == data.category_id).first()
+        if not cat:
+            raise HTTPException(status_code=400, detail="Category not found")
+            
+    updated_count = db.query(Transaction).filter(
+        Transaction.description == data.description
+    ).update({"category_id": data.category_id}, synchronize_session=False)
+    
+    db.commit()
+    return {"message": f"Updated {updated_count} transactions"}
+
