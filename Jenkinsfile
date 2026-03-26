@@ -76,7 +76,7 @@ pipeline {
                     // Создаем docker-compose файл без локальной БД, 
                     // ссылаясь на PostgreSQL хоста (host.docker.internal)
                     def composeContent = """
-version: '3.8'
+version: "3.8"
 
 services:
   backend:
