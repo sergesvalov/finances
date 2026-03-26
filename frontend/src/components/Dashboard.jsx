@@ -14,6 +14,14 @@ const Dashboard = () => {
   const [categoryTransactions, setCategoryTransactions] = useState([]);
   const [loadingCategory, setLoadingCategory] = useState(false);
 
+  const [categories, setCategories] = useState([]);
+  const [editingTxId, setEditingTxId] = useState(null);
+  const [categorySearch, setCategorySearch] = useState('');
+
+  useEffect(() => {
+    api.get('/categories').then(res => setCategories(res.data)).catch(console.error);
+  }, []);
+
   useEffect(() => {
     const fetchAnalytics = async () => {
       setLoading(true);
@@ -64,6 +72,44 @@ const Dashboard = () => {
       console.error(err);
     } finally {
       setLoadingCategory(false);
+    }
+  };
+
+  const handleUpdateTransactionCategory = async (txId, categoryId, categoryName) => {
+    try {
+      if (categoryId === null) {
+        await api.patch(`/transactions/${txId}/category`);
+      } else {
+        await api.patch(`/transactions/${txId}/category?category_id=${categoryId}`);
+      }
+      
+      // Update local transaction state
+      setCategoryTransactions(prev => prev.map(t => t.id === txId ? { ...t, category: categoryName } : t));
+      
+      // Re-fetch analytics to perfectly reflect the change in charts & totals
+      const params = selectedMonth ? { month: selectedMonth } : {};
+      api.get('/analytics/summary', { params })
+         .then(res => setData(res.data))
+         .catch(console.error);
+
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setEditingTxId(null);
+      setCategorySearch('');
+    }
+  };
+
+  const handleCreateNewCategory = async (txId, newName) => {
+    try {
+      const res = await api.post('/categories', { name: newName });
+      const newCat = res.data;
+      if (!categories.find(c => c.id === newCat.id)) {
+        setCategories(prev => [...prev, newCat]);
+      }
+      handleUpdateTransactionCategory(txId, newCat.id, newCat.name);
+    } catch (err) {
+      console.error(err);
     }
   };
 
@@ -228,6 +274,7 @@ const Dashboard = () => {
                   <tr>
                     <th style={{ textAlign: 'left', paddingBottom: '0.5rem', fontWeight: 500 }}>Date</th>
                     <th style={{ textAlign: 'left', paddingBottom: '0.5rem', fontWeight: 500 }}>Description</th>
+                    <th style={{ textAlign: 'left', paddingBottom: '0.5rem', fontWeight: 500 }}>Category</th>
                     <th style={{ textAlign: 'right', paddingBottom: '0.5rem', fontWeight: 500 }}>Amount</th>
                   </tr>
                 </thead>
@@ -236,6 +283,53 @@ const Dashboard = () => {
                     <tr key={t.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
                       <td style={{ padding: '0.75rem 0', color: 'var(--text-muted)' }}>{t.execution_date.split('T')[0]}</td>
                       <td style={{ padding: '0.75rem 0.5rem' }}>{t.description}</td>
+                      <td style={{ padding: '0.75rem 0.5rem', position: 'relative' }}>
+                        {editingTxId === t.id ? (
+                          <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 50, backgroundColor: 'var(--card-bg)', border: '1px solid var(--border-color)', borderRadius: '0.5rem', padding: '0.5rem', width: '220px', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.5)' }}>
+                            <input 
+                              type="text" 
+                              autoFocus
+                              placeholder="Search or create..."
+                              value={categorySearch}
+                              onChange={(e) => setCategorySearch(e.target.value)}
+                              style={{ width: '100%', padding: '0.5rem', backgroundColor: 'rgba(255,255,255,0.05)', color: 'white', border: '1px solid var(--border-color)', borderRadius: '0.25rem', marginBottom: '0.5rem', outline: 'none' }}
+                            />
+                            <div style={{ maxHeight: '150px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                              {categories.filter(c => c.name.toLowerCase().includes(categorySearch.toLowerCase())).map(c => (
+                                <button key={c.id} onClick={() => handleUpdateTransactionCategory(t.id, c.id, c.name)} style={{ textAlign: 'left', padding: '0.5rem', background: 'none', border: 'none', color: 'var(--text-main)', cursor: 'pointer', borderRadius: '0.25rem' }} onMouseOver={e => e.target.style.backgroundColor = 'rgba(255,255,255,0.05)'} onMouseOut={e => e.target.style.backgroundColor = 'transparent'}>
+                                  {c.name}
+                                </button>
+                              ))}
+                              {categorySearch && !categories.some(c => c.name.toLowerCase() === categorySearch.toLowerCase()) && (
+                                <button onClick={() => handleCreateNewCategory(t.id, categorySearch)} style={{ textAlign: 'left', padding: '0.5rem', background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer', borderRadius: '0.25rem', fontWeight: 500 }} onMouseOver={e => e.target.style.backgroundColor = 'rgba(255,255,255,0.05)'} onMouseOut={e => e.target.style.backgroundColor = 'transparent'}>
+                                  + Create "{categorySearch}"
+                                </button>
+                              )}
+                              {t.category && (
+                                <button onClick={() => handleUpdateTransactionCategory(t.id, null, null)} style={{ textAlign: 'left', padding: '0.5rem', background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', borderRadius: '0.25rem', marginTop: '0.25rem', borderTop: '1px solid var(--border-color)' }} onMouseOver={e => e.target.style.backgroundColor = 'rgba(255,255,255,0.05)'} onMouseOut={e => e.target.style.backgroundColor = 'transparent'}>
+                                  Remove Category
+                                </button>
+                              )}
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
+                               <button onClick={() => setEditingTxId(null)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.75rem' }}>Cancel</button>
+                            </div>
+                          </div>
+                        ) : (
+                          <span 
+                            onClick={() => { setEditingTxId(t.id); setCategorySearch(''); }}
+                            style={{ 
+                              backgroundColor: 'rgba(255,255,255,0.1)', 
+                              padding: '0.25rem 0.5rem', 
+                              borderRadius: '1rem',
+                              fontSize: '0.75rem',
+                              cursor: 'pointer',
+                              display: 'inline-block'
+                            }}>
+                            {t.category || 'Uncategorized'}
+                          </span>
+                        )}
+                      </td>
                       <td style={{ padding: '0.75rem 0', textAlign: 'right', fontWeight: 500, color: t.amount < 0 ? 'var(--text-main)' : 'var(--success)' }}>
                         €{Math.abs(t.amount).toFixed(2)}
                       </td>
