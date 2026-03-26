@@ -46,6 +46,15 @@ const Dashboard = () => {
   const handleCategoryClick = async (categoryName) => {
     setSelectedCategory(categoryName);
     setLoadingCategory(true);
+    
+    // Auto-scroll logic so users see the transactions appearing below
+    setTimeout(() => {
+      const el = document.getElementById('category-transactions-card');
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth' });
+      }
+    }, 50);
+
     try {
       const params = { category: categoryName, limit: 100 };
       if (selectedMonth) params.month = selectedMonth;
@@ -199,44 +208,42 @@ const Dashboard = () => {
         </>
       )}
 
-      {/* Category Breakdown Modal */}
+      {/* Inline Category Transactions */}
       {selectedCategory && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }} onClick={() => setSelectedCategory(null)}>
-          <div style={{ backgroundColor: 'var(--card-bg)', borderRadius: '1rem', width: '100%', maxWidth: '600px', maxHeight: '80vh', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)' }} onClick={e => e.stopPropagation()}>
-            <div style={{ padding: '1.5rem', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h3 style={{ margin: 0 }}>{selectedCategory} Transactions</h3>
-              <button onClick={() => setSelectedCategory(null)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
-                <X size={24} />
-              </button>
-            </div>
-            <div style={{ padding: '1.5rem', overflowY: 'auto', flex: 1 }}>
-              {loadingCategory ? (
-                <div style={{ textAlign: 'center', color: 'var(--text-muted)' }}>Loading transactions...</div>
-              ) : categoryTransactions.length === 0 ? (
-                 <div style={{ textAlign: 'center', color: 'var(--text-muted)' }}>No transactions found.</div>
-              ) : (
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
-                  <thead style={{ color: 'var(--text-muted)', borderBottom: '1px solid var(--border-color)' }}>
-                    <tr>
-                      <th style={{ textAlign: 'left', paddingBottom: '0.5rem', fontWeight: 500 }}>Date</th>
-                      <th style={{ textAlign: 'left', paddingBottom: '0.5rem', fontWeight: 500 }}>Description</th>
-                      <th style={{ textAlign: 'right', paddingBottom: '0.5rem', fontWeight: 500 }}>Amount</th>
+        <div id="category-transactions-card" className="card" style={{ marginTop: '1.5rem', scrollMarginTop: '2rem' }}>
+          <div style={{ paddingBottom: '1.5rem', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+            <h3 style={{ margin: 0 }}>{selectedCategory} Transactions</h3>
+            <button onClick={() => setSelectedCategory(null)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '0.25rem' }}>
+              <X size={24} />
+            </button>
+          </div>
+          <div style={{ overflowX: 'auto' }}>
+            {loadingCategory ? (
+              <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '2rem' }}>Loading transactions...</div>
+            ) : categoryTransactions.length === 0 ? (
+               <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '2rem' }}>No transactions found.</div>
+            ) : (
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
+                <thead style={{ color: 'var(--text-muted)', borderBottom: '1px solid var(--border-color)' }}>
+                  <tr>
+                    <th style={{ textAlign: 'left', paddingBottom: '0.5rem', fontWeight: 500 }}>Date</th>
+                    <th style={{ textAlign: 'left', paddingBottom: '0.5rem', fontWeight: 500 }}>Description</th>
+                    <th style={{ textAlign: 'right', paddingBottom: '0.5rem', fontWeight: 500 }}>Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {categoryTransactions.map(t => (
+                    <tr key={t.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                      <td style={{ padding: '0.75rem 0', color: 'var(--text-muted)' }}>{t.execution_date.split('T')[0]}</td>
+                      <td style={{ padding: '0.75rem 0.5rem' }}>{t.description}</td>
+                      <td style={{ padding: '0.75rem 0', textAlign: 'right', fontWeight: 500, color: t.amount < 0 ? 'var(--text-main)' : 'var(--success)' }}>
+                        €{Math.abs(t.amount).toFixed(2)}
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {categoryTransactions.map(t => (
-                      <tr key={t.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
-                        <td style={{ padding: '0.75rem 0', color: 'var(--text-muted)' }}>{t.execution_date.split('T')[0]}</td>
-                        <td style={{ padding: '0.75rem 0.5rem' }}>{t.description}</td>
-                        <td style={{ padding: '0.75rem 0', textAlign: 'right', fontWeight: 500, color: t.amount < 0 ? 'var(--text-main)' : 'var(--success)' }}>
-                          €{Math.abs(t.amount).toFixed(2)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
         </div>
       )}
