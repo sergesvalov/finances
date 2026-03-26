@@ -50,6 +50,7 @@ def process_csv_import(file_contents: bytes, db: Session) -> dict:
         
     imported_count = 0
     skipped_count = 0
+    seen_hashes_in_file = set()
     
     # Filter only COMPLETED or relevant states, skip pending if necessary
     # Revolut 'State' might be 'COMPLETED', 'PENDING', 'REVERTED'
@@ -70,12 +71,19 @@ def process_csv_import(file_contents: bytes, db: Session) -> dict:
              
              tx_hash = generate_hash(date_str, str(amount), description)
              
-             # Check if exists
-             existing = db.query(Transaction).filter(Transaction.original_hash == tx_hash).first()
-             if existing:
+             # Check if duplicate in the same file
+             if tx_hash in seen_hashes_in_file:
                  skipped_count += 1
                  continue
                  
+             # Check if exists in db
+             existing = db.query(Transaction).filter(Transaction.original_hash == tx_hash).first()
+             if existing:
+                 skipped_count += 1
+                 seen_hashes_in_file.add(tx_hash)
+                 continue
+                 
+             seen_hashes_in_file.add(tx_hash)
              # Assign category
              cat_id = guess_category(description, db)
              
