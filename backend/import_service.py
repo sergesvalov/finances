@@ -54,7 +54,7 @@ def process_csv_import(file_contents: bytes, db: Session) -> dict:
     # Filter only COMPLETED or relevant states, skip pending if necessary
     # Revolut 'State' might be 'COMPLETED', 'PENDING', 'REVERTED'
     if 'State' in df.columns:
-         df = df[df['State'] == 'COMPLETED']
+         df = df[df['State'].isin(['COMPLETED', 'ВЫПОЛНЕНО'])]
          
     for _, row in df.iterrows():
         try:
