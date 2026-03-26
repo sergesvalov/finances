@@ -1,7 +1,9 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: 'http://localhost:7051/api', // For local dev, in production usually just /api
+  // Use relative path '/api' so that in production, the browser calls the same domain 
+  // and Nginx seamlessly proxies the request to the backend.
+  baseURL: import.meta.env.VITE_API_URL || '/api',
   headers: {
     'Content-Type': 'application/json',
   },

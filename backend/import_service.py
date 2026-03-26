@@ -39,6 +39,8 @@ def process_csv_import(file_contents: bytes, db: Session) -> dict:
         # Revolut typically uses utf-8 and comma separator
         df = pd.read_csv(BytesIO(file_contents))
     except Exception as e:
+        import logging
+        logging.getLogger(__name__).error("Failed to parse CSV", exc_info=True)
         return {"error": f"Failed to parse CSV: {str(e)}"}
     
     # Check if necessary columns exist
@@ -91,7 +93,8 @@ def process_csv_import(file_contents: bytes, db: Session) -> dict:
              
         except Exception as e:
              # Skip row if invalid data
-             print(f"Error skipping row: {e}")
+             import logging
+             logging.getLogger(__name__).warning(f"Error skipping row: {e}", exc_info=True)
              skipped_count += 1
              continue
              

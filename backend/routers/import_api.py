@@ -15,6 +15,8 @@ async def upload_csv(file: UploadFile = File(...), db: Session = Depends(get_db)
     result = import_service.process_csv_import(contents, db)
     
     if "error" in result:
+        import logging
+        logging.getLogger(__name__).error(f"Import returned error: {result['error']}")
         raise HTTPException(status_code=400, detail=result["error"])
         
     return {
