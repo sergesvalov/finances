@@ -31,13 +31,11 @@ const TransactionList = () => {
       const { similar_count, description } = res.data;
       
       if (similar_count > 0) {
-        if (window.confirm(`Найдено ещё ${similar_count} позиций с описанием "${description}". Перенести их тоже в эту категорию?`)) {
-          await api.post('/transactions/bulk_category', { description, category_id: categoryId });
-          fetchTransactions();
-          setEditingTxId(null);
-          setCategorySearch('');
-          return;
-        }
+        await api.post('/transactions/bulk_category', { description, category_id: categoryId });
+        fetchTransactions();
+        setEditingTxId(null);
+        setCategorySearch('');
+        return;
       }
 
       // Update local state if single update

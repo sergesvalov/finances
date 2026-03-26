@@ -87,16 +87,12 @@ const Dashboard = () => {
       const { similar_count, description } = res.data;
       
       if (similar_count > 0) {
-        if (window.confirm(`Найдено ещё ${similar_count} позиций с описанием "${description}". Перенести их тоже в эту категорию?`)) {
-           await api.post('/transactions/bulk_category', { description, category_id: categoryId });
-           if (selectedCategory) {
-              const params = { category: selectedCategory, limit: 100 };
-              if (selectedMonth) params.month = selectedMonth;
-              api.get('/transactions', { params }).then(tr => setCategoryTransactions(tr.data.items));
-           }
-        } else {
-           setCategoryTransactions(prev => prev.map(t => t.id === txId ? { ...t, category: categoryName } : t));
-        }
+         await api.post('/transactions/bulk_category', { description, category_id: categoryId });
+         if (selectedCategory) {
+            const params = { category: selectedCategory, limit: 100 };
+            if (selectedMonth) params.month = selectedMonth;
+            api.get('/transactions', { params }).then(tr => setCategoryTransactions(tr.data.items));
+         }
       } else {
          setCategoryTransactions(prev => prev.map(t => t.id === txId ? { ...t, category: categoryName } : t));
       }
