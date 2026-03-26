@@ -8,6 +8,13 @@ class Setting(Base):
     key = Column(String, primary_key=True, index=True)
     value = Column(String)
 
+class TelegramRecipient(Base):
+    __tablename__ = "telegram_recipients"
+
+    id = Column(Integer, primary_key=True, index=True)
+    telegram_id = Column(String, unique=True, index=True)
+    name = Column(String)
+
 class Category(Base):
     __tablename__ = "categories"
 
