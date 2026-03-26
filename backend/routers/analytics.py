@@ -132,6 +132,9 @@ def send_telegram_report(req: ReportRequest, db: Session = Depends(get_db)):
     
     success_count = 0
     from fastapi import HTTPException
+    import urllib.error
+    last_error = "Unknown error"
+    
     for r in recipients:
         payload = json.dumps({
             "chat_id": r.telegram_id,
@@ -144,10 +147,18 @@ def send_telegram_report(req: ReportRequest, db: Session = Depends(get_db)):
             with urllib.request.urlopen(req_obj) as response:
                 if response.getcode() == 200:
                     success_count += 1
+        except urllib.error.HTTPError as e:
+            try:
+                err_body = e.read().decode('utf-8')
+            except:
+                err_body = "Could not read response body"
+            print(f"Telegram API Error for {r.telegram_id}: {e.code} - {err_body}")
+            last_error = f"Telegram {e.code}: {err_body}"
         except Exception as e:
             print(f"Failed to send to {r.telegram_id}: {e}")
+            last_error = str(e)
             
     if success_count == 0:
-        raise HTTPException(status_code=500, detail="Failed to send report to any recipients. Check bot token and IDs.")
+        raise HTTPException(status_code=500, detail=f"Failed to send report. Error: {last_error}")
         
     return {"message": f"Report successfully sent to {success_count} recipients."}
