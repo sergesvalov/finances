@@ -82,18 +82,17 @@ services:
   backend:
     image: ${DOCKER_IMAGE_BACKEND}:latest
     restart: always
+    network_mode: "host"
     environment:
-      - DATABASE_URL=postgresql://postgres@host.docker.internal:5432/finances_db
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      - DATABASE_URL=postgresql://postgres@127.0.0.1:5432/finances_db
 
   frontend:
     image: ${DOCKER_IMAGE_FRONTEND}:latest
     restart: always
     ports:
       - "${HOST_PORT}:80"
-    depends_on:
-      - backend
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 """
 
                     sshagent(credentials: [SSH_CREDS_ID]) {
