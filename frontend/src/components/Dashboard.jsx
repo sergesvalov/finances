@@ -261,7 +261,16 @@ const Dashboard = () => {
                     contentStyle={{ backgroundColor: 'var(--card-bg)', borderColor: 'var(--border-color)', borderRadius: '0.5rem' }} 
                     itemStyle={{ color: 'var(--text-main)' }}
                   />
-                  <Legend />
+                  <Legend 
+                    onClick={(props) => {
+                      if (props && props.payload && props.payload.name) {
+                        setSelectedPieSegment(props.payload);
+                      } else if (props && props.name) {
+                        setSelectedPieSegment(props);
+                      }
+                    }}
+                    wrapperStyle={{ cursor: 'pointer' }}
+                  />
                 </PieChart>
               </ResponsiveContainer>
             </div>
