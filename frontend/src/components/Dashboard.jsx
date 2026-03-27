@@ -145,6 +145,13 @@ const Dashboard = () => {
 
   const totalSpent = data.category_spending.reduce((acc, curr) => acc + curr.value, 0);
 
+  const flatCategories = data.category_spending.reduce((acc, group) => {
+    if (group.subcategories && group.subcategories.length > 0) {
+      return [...acc, ...group.subcategories];
+    }
+    return [...acc, { name: group.name, value: group.value }];
+  }, []).sort((a, b) => b.value - a.value);
+
   return (
     <div>
       <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -233,7 +240,7 @@ const Dashboard = () => {
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
-                    data={data.category_spending}
+                    data={flatCategories}
                     cx="50%"
                     cy="50%"
                     innerRadius={70}
@@ -241,7 +248,7 @@ const Dashboard = () => {
                     paddingAngle={5}
                     dataKey="value"
                   >
-                    {data.category_spending.map((entry, index) => (
+                    {flatCategories.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Pie>

@@ -152,7 +152,7 @@ def send_telegram_report(req: ReportRequest, db: Session = Depends(get_db)):
         lines.append("")
         
     message = "\n".join(lines)
-    url = f"https://api.telegram.org/bot{token_setting.value}/sendMessage"
+    url = f"https://api.telegram.org/bot{token_setting.value.strip()}/sendMessage"
     
     success_count = 0
     from fastapi import HTTPException
