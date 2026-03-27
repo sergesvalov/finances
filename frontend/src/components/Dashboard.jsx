@@ -292,11 +292,37 @@ const Dashboard = () => {
                     <span style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>€{group.value.toFixed(2)}</span>
                   </div>
                   
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
                     {group.subcategories && group.subcategories.map(sub => (
-                       <div key={sub.name} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem', color: 'var(--text-muted)' }}>
+                       <div 
+                         key={sub.name} 
+                         onClick={() => handleCategoryClick(sub.name)}
+                         style={{ 
+                           display: 'flex', 
+                           justifyContent: 'space-between', 
+                           fontSize: '0.9rem', 
+                           color: selectedCategory === sub.name ? 'var(--primary)' : 'var(--text-muted)',
+                           cursor: 'pointer',
+                           padding: '0.5rem',
+                           borderRadius: '0.25rem',
+                           backgroundColor: selectedCategory === sub.name ? 'rgba(99, 102, 241, 0.1)' : 'transparent',
+                           transition: 'all 0.2s ease'
+                         }}
+                         onMouseOver={(e) => {
+                           if (selectedCategory !== sub.name) {
+                             e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)';
+                             e.currentTarget.style.color = 'var(--text-main)';
+                           }
+                         }}
+                         onMouseOut={(e) => {
+                           if (selectedCategory !== sub.name) {
+                             e.currentTarget.style.backgroundColor = 'transparent';
+                             e.currentTarget.style.color = 'var(--text-muted)';
+                           }
+                         }}
+                       >
                           <span>{sub.name}</span>
-                          <span style={{ color: 'var(--text-main)' }}>€{sub.value.toFixed(2)}</span>
+                          <span style={{ color: selectedCategory === sub.name ? 'var(--primary)' : 'var(--text-main)' }}>€{sub.value.toFixed(2)}</span>
                        </div>
                     ))}
                   </div>
