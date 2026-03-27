@@ -66,6 +66,14 @@ def get_analytics_summary(month: Optional[str] = Query(None), db: Session = Depe
     for name, total in cat_query:
         raw_categories.append({"name": name, "value": abs(float(total))})
 
+    uncat_query = db.query(func.sum(Transaction.amount).label("total")) \
+        .filter(Transaction.amount < 0, Transaction.category_id == None)
+        
+    if start_date and end_date:
+        uncat_query = uncat_query.filter(Transaction.execution_date >= start_date, Transaction.execution_date <= end_date)
+        
+    uncat_total = uncat_query.scalar()
+
     if uncat_total:
          raw_categories.append({"name": "Uncategorized", "value": abs(float(uncat_total))})
          
