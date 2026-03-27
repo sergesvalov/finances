@@ -9,6 +9,8 @@ const Dashboard = () => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [selectedMonth, setSelectedMonth] = useState('');
+  
+  const [selectedPieSegment, setSelectedPieSegment] = useState(null);
 
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [categoryTransactions, setCategoryTransactions] = useState([]);
@@ -247,6 +249,8 @@ const Dashboard = () => {
                     outerRadius={100}
                     paddingAngle={5}
                     dataKey="value"
+                    onClick={(entry) => setSelectedPieSegment(entry)}
+                    style={{ cursor: 'pointer' }}
                   >
                     {flatCategories.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
@@ -339,6 +343,59 @@ const Dashboard = () => {
           </div>
         </div>
         </>
+      )}
+
+      {/* Pie Chart Click Modal */}
+      {selectedPieSegment && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, 
+          backgroundColor: 'rgba(0,0,0,0.7)', zIndex: 1000, 
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          backdropFilter: 'blur(2px)'
+        }}
+        onClick={(e) => {
+          // close if clicking exactly on backdrop
+          if (e.target === e.currentTarget) setSelectedPieSegment(null);
+        }}>
+          <div className="card" style={{ width: '320px', backgroundColor: 'var(--card-bg)', position: 'relative', border: '1px solid var(--border-color)', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)' }}>
+            <button 
+              onClick={() => setSelectedPieSegment(null)} 
+              style={{ position: 'absolute', top: '15px', right: '15px', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
+            >
+              <X size={20} />
+            </button>
+            <h3 style={{ marginTop: 0, marginBottom: '0.25rem', paddingRight: '2rem', fontSize: '1.25rem' }}>
+               {selectedPieSegment.name}
+            </h3>
+            <p style={{ margin: '0 0 1.5rem 0', color: 'var(--text-muted)', fontSize: '0.875rem' }}>
+              Category Detail
+            </p>
+            
+            <div style={{ padding: '1rem', backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: '0.5rem', marginBottom: '1.5rem' }}>
+               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                 <span style={{ color: 'var(--text-muted)' }}>Amount Spent:</span>
+                 <span style={{ fontWeight: '600', color: 'var(--text-main)' }}>€{selectedPieSegment.value.toFixed(2)}</span>
+               </div>
+               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                 <span style={{ color: 'var(--text-muted)' }}>% of Total:</span>
+                 <span style={{ fontWeight: '600', color: 'var(--primary)' }}>
+                   {((selectedPieSegment.value / totalSpent) * 100).toFixed(1)}%
+                 </span>
+               </div>
+            </div>
+
+            <button 
+               onClick={() => { 
+                 const catName = selectedPieSegment.name;
+                 setSelectedPieSegment(null); 
+                 handleCategoryClick(catName); 
+               }} 
+               className="btn btn-primary" 
+               style={{ width: '100%', padding: '0.75rem', fontWeight: '500' }}>
+               View Transactions
+            </button>
+          </div>
+        </div>
       )}
 
       {/* Inline Category Transactions */}
