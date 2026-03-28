@@ -265,7 +265,7 @@ const Dashboard = () => {
       ) : (
         <>
         <div className="dashboard-grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
-          <div className="card chart-card">
+          <div className="card chart-card" style={{ height: '520px' }}>
             <h3 style={{ marginBottom: '1.5rem' }}>Spending by Category</h3>
             <div style={{ flex: 1, minHeight: 0 }}>
               <ResponsiveContainer width="100%" height="100%">
