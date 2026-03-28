@@ -162,8 +162,20 @@ def send_telegram_report(req: ReportRequest, db: Session = Depends(get_db)):
         lines.append("")
         
     message = "\n".join(lines)
-    url = f"https://api.telegram.org/bot{token_setting.value.strip()}/sendMessage"
     
+    raw_token = token_setting.value.strip()
+    # Handle if user pasted full URL
+    if "api.telegram.org" in raw_token:
+        import re
+        match = re.search(r'bot([^/]+)', raw_token)
+        if match:
+            raw_token = match.group(1)
+            
+    # Handle if user pasted "bot" prefix
+    if raw_token.lower().startswith("bot"):
+        raw_token = raw_token[3:]
+        
+    url = f"https://api.telegram.org/bot{raw_token}/sendMessage"    
     success_count = 0
     from fastapi import HTTPException
     import urllib.error
