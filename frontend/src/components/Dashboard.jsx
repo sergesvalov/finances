@@ -35,13 +35,13 @@ const Dashboard = () => {
       try {
         const params = selectedMonth ? { month: selectedMonth } : {};
         const [resSum, resPayees, resSubs] = await Promise.all([
-           api.get('/analytics/summary', { params }),
-           api.get('/analytics/payees', { params }),
-           api.get('/analytics/subscriptions')
+           api.get('/analytics/summary', { params }).catch(e => ({ data: null })),
+           api.get('/analytics/payees', { params }).catch(e => ({ data: [] })),
+           api.get('/analytics/subscriptions').catch(e => ({ data: [] }))
         ]);
         setData(resSum.data);
-        setPayees(resPayees.data);
-        setSubscriptions(resSubs.data);
+        setPayees(resPayees.data || []);
+        setSubscriptions(resSubs.data || []);
       } catch (err) {
         console.error("Failed to fetch analytics:", err);
       } finally {
@@ -55,11 +55,11 @@ const Dashboard = () => {
     return <div style={{ padding: '2rem', textAlign: 'center' }}>Loading Dashboard...</div>;
   }
 
-  if (!data || (!data.category_spending.length && !data.balance_dynamics.length && !data.available_months.length)) {
+  if (!data || !data.category_spending || (!data.category_spending.length && (!data.balance_dynamics || !data.balance_dynamics.length) && (!data.available_months || !data.available_months.length))) {
     return (
         <div style={{ textAlign: 'center', padding: '4rem 0' }}>
           <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>No data available</h2>
-          <p className="text-muted">Upload a Revolut CSV statement to see your analytics.</p>
+          <p className="text-muted">Analytics data could not be loaded or is empty.</p>
         </div>
     );
   }
@@ -150,11 +150,11 @@ const Dashboard = () => {
     }
   };
 
-  const currentBalance = data.balance_dynamics.length > 0 
+  const currentBalance = data.balance_dynamics && data.balance_dynamics.length > 0 
     ? data.balance_dynamics[data.balance_dynamics.length - 1].balance
     : 0;
 
-  const totalSpent = data.category_spending.reduce((acc, curr) => acc + curr.value, 0);
+  const totalSpent = data.category_spending ? data.category_spending.reduce((acc, curr) => acc + curr.value, 0) : 0;
 
   const calculateChange = (current, previous) => {
     if (!previous) return null;
@@ -171,12 +171,12 @@ const Dashboard = () => {
   const incomeChange = calculateChange(data.total_income || 0, data.previous_total_income);
   const expenseChange = calculateChange(totalSpent, data.previous_total_expenses);
 
-  const flatCategories = data.category_spending.reduce((acc, group) => {
+  const flatCategories = data.category_spending ? data.category_spending.reduce((acc, group) => {
     if (group.subcategories && group.subcategories.length > 0) {
       return [...acc, ...group.subcategories];
     }
     return [...acc, { name: group.name, value: group.value }];
-  }, []).sort((a, b) => b.value - a.value);
+  }, []).sort((a, b) => b.value - a.value) : [];
 
   return (
     <div>
@@ -267,7 +267,7 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {data.category_spending.length === 0 && data.balance_dynamics.length === 0 ? (
+      {(!data.category_spending || data.category_spending.length === 0) && (!data.balance_dynamics || data.balance_dynamics.length === 0) ? (
         <div style={{ textAlign: 'center', padding: '3rem', backgroundColor: 'var(--card-bg)', borderRadius: '1rem', marginTop: '1.5rem' }}>
           <p className="text-muted">No transactions found for the selected period.</p>
         </div>
@@ -434,7 +434,7 @@ const Dashboard = () => {
             <h3 style={{ margin: 0 }}>Category Breakdown</h3>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1rem' }}>
-            {[...data.category_spending].sort((a, b) => b.value - a.value).map((group, index) => {
+            {data.category_spending && [...data.category_spending].sort((a, b) => b.value - a.value).map((group, index) => {
               const originalIndex = data.category_spending.findIndex(c => c.name === group.name);
               const color = COLORS[originalIndex % COLORS.length];
               
