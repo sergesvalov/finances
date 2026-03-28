@@ -191,7 +191,10 @@ def get_analytics_summary(month: Optional[str] = Query(None), db: Session = Depe
         g_idx = get_node(g["name"])
         links.append({"source": source_idx, "target": g_idx, "value": g["value"]})
         for sub in g["subcategories"]:
-            sub_idx = get_node(sub["name"])
+            sub_name = sub["name"]
+            if sub_name == g["name"]:
+                sub_name = f"{sub_name} (Category)"
+            sub_idx = get_node(sub_name)
             links.append({"source": g_idx, "target": sub_idx, "value": sub["value"]})
             
     if source_name == "Income" and total_inc > total_spent:
