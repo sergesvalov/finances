@@ -295,3 +295,65 @@ def send_telegram_report(req: ReportRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Failed to send report. Error: {last_error}")
         
     return {"message": f"Report successfully sent to {success_count} recipients."}
+
+@router.get("/payees")
+def get_top_payees(month: Optional[str] = Query(None), limit: int = 10, db: Session = Depends(get_db)):
+    start_date, end_date = None, None
+    if month:
+        try:
+            year, m = map(int, month.split('-'))
+            last_day = calendar.monthrange(year, m)[1]
+            start_date = datetime(year, m, 1)
+            end_date = datetime(year, m, last_day, 23, 59, 59)
+        except ValueError:
+            pass
+
+    query = db.query(
+        Transaction.description,
+        func.sum(Transaction.amount).label("total")
+    ).filter(Transaction.amount < 0)
+    
+    if start_date and end_date:
+        query = query.filter(Transaction.execution_date >= start_date, Transaction.execution_date <= end_date)
+        
+    results = query.group_by(Transaction.description).order_by(func.sum(Transaction.amount).asc()).limit(limit).all()
+    
+    return [{"name": name, "value": abs(float(total))} for name, total in results if name]
+
+@router.get("/subscriptions")
+def get_subscriptions(db: Session = Depends(get_db)):
+    tx_list = db.query(Transaction.execution_date, Transaction.amount, Transaction.description).filter(Transaction.amount < 0).all()
+    if not tx_list:
+        return []
+        
+    df = pd.DataFrame([{"date": t.execution_date, "amount": float(t.amount), "desc": t.description} for t in tx_list if t.description])
+    if df.empty:
+        return []
+        
+    df['month'] = df['date'].dt.to_period('M')
+    monthly = df.groupby(['desc', 'month'])['amount'].sum().reset_index()
+    
+    sub_candidates = monthly.groupby('desc').agg(
+        months_count=('month', 'nunique'),
+        avg_amount=('amount', 'mean')
+    ).reset_index()
+    
+    subs = sub_candidates[sub_candidates['months_count'] >= 2]
+    
+    result = []
+    for _, row in subs.iterrows():
+        desc = row['desc']
+        desc_txs = df[df['desc'] == desc].sort_values('date', ascending=False)
+        latest_amt = desc_txs.iloc[0]['amount']
+        latest_date = desc_txs.iloc[0]['date']
+        
+        result.append({
+            "name": desc,
+            "months_active": int(row['months_count']),
+            "average_amount": abs(float(row['avg_amount'])),
+            "latest_amount": abs(float(latest_amt)),
+            "last_date": latest_date.strftime('%Y-%m-%d')
+        })
+    
+    return sorted(result, key=lambda x: x['latest_amount'], reverse=True)
+

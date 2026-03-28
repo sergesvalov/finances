@@ -7,6 +7,9 @@ const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'
 
 const Dashboard = () => {
   const [data, setData] = useState(null);
+  const [payees, setPayees] = useState([]);
+  const [subscriptions, setSubscriptions] = useState([]);
+
   const [loading, setLoading] = useState(true);
   const [selectedMonth, setSelectedMonth] = useState('');
   
@@ -31,8 +34,14 @@ const Dashboard = () => {
       setLoading(true);
       try {
         const params = selectedMonth ? { month: selectedMonth } : {};
-        const res = await api.get('/analytics/summary', { params });
-        setData(res.data);
+        const [resSum, resPayees, resSubs] = await Promise.all([
+           api.get('/analytics/summary', { params }),
+           api.get('/analytics/payees', { params }),
+           api.get('/analytics/subscriptions')
+        ]);
+        setData(resSum.data);
+        setPayees(resPayees.data);
+        setSubscriptions(resSubs.data);
       } catch (err) {
         console.error("Failed to fetch analytics:", err);
       } finally {
@@ -474,6 +483,55 @@ const Dashboard = () => {
               );
             })}
           </div>
+        </div>
+
+        {/* Row 4: Top Payees & Subscriptions */}
+        <div className="dashboard-grid" style={{ gridTemplateColumns: '1fr 1fr', marginTop: '1.5rem' }}>
+          
+          <div className="card">
+            <h3 style={{ marginBottom: '1.5rem' }}>Top Payees</h3>
+            {payees && payees.length > 0 ? (
+               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
+                 <tbody>
+                    {payees.map((p, i) => (
+                      <tr key={i} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                         <td style={{ padding: '0.75rem 0', color: 'var(--text-main)', fontWeight: 500 }}>{p.name}</td>
+                         <td style={{ padding: '0.75rem 0', textAlign: 'right', color: 'var(--danger)' }}>€{p.value.toFixed(2)}</td>
+                      </tr>
+                    ))}
+                 </tbody>
+               </table>
+            ) : (
+               <div style={{ color: 'var(--text-muted)' }}>No payee data found.</div>
+            )}
+          </div>
+          
+          <div className="card">
+            <h3 style={{ marginBottom: '1.5rem' }}>Active Subscriptions & Recurring</h3>
+            {subscriptions && subscriptions.length > 0 ? (
+               <div style={{ maxHeight: '400px', overflowY: 'auto', paddingRight: '0.5rem' }}>
+                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
+                   <tbody>
+                      {subscriptions.map((sub, i) => (
+                        <tr key={i} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                           <td style={{ padding: '0.75rem 0' }}>
+                             <div style={{ fontWeight: 500, color: 'var(--text-main)' }}>{sub.name}</div>
+                             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px' }}>Active {sub.months_active} months • Last seen {sub.last_date}</div>
+                           </td>
+                           <td style={{ padding: '0.75rem 0', textAlign: 'right' }}>
+                             <div style={{ color: 'var(--danger)', fontWeight: 500 }}>€{sub.latest_amount.toFixed(2)}</div>
+                             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px' }}>Avg: €{sub.average_amount.toFixed(2)}</div>
+                           </td>
+                        </tr>
+                      ))}
+                   </tbody>
+                 </table>
+               </div>
+            ) : (
+               <div style={{ color: 'var(--text-muted)' }}>No subscriptions or recurring payments identified.</div>
+            )}
+          </div>
+          
         </div>
         </>
       )}

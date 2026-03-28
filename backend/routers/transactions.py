@@ -4,7 +4,7 @@ import calendar
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from database import get_db
-from models import Transaction, Category
+from models import Transaction, Category, Tag
 from schemas import Transaction as TransactionSchema
 from pydantic import BaseModel
 
@@ -16,6 +16,7 @@ def get_transactions(
     limit: int = 50, 
     search: Optional[str] = None,
     category: Optional[str] = None,
+    tag: Optional[str] = None,
     month: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
@@ -29,6 +30,9 @@ def get_transactions(
             query = query.filter(Transaction.category_id == None)
         else:
             query = query.join(Category).filter(Category.name == category)
+            
+    if tag:
+        query = query.filter(Transaction.tags.any(Tag.name == tag))
             
     if month:
         try:
@@ -53,7 +57,8 @@ def get_transactions(
                 "amount": float(t.amount),
                 "currency": t.currency,
                 "balance": float(t.balance) if t.balance else 0.0,
-                "category": t.category.name if t.category else None
+                "category": t.category.name if t.category else None,
+                "tags": [{"id": tag.id, "name": tag.name} for tag in t.tags]
             } for t in transactions
         ],
         "total": total,
@@ -109,3 +114,32 @@ def bulk_update_category(data: BulkCategoryUpdate, db: Session = Depends(get_db)
     db.commit()
     return {"message": f"Updated {updated_count} transactions"}
 
+@router.post("/{transaction_id}/tags/{tag_id}")
+def add_tag_to_transaction(transaction_id: int, tag_id: int, db: Session = Depends(get_db)):
+    tx = db.query(Transaction).filter(Transaction.id == transaction_id).first()
+    if not tx:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+        
+    tag = db.query(Tag).filter(Tag.id == tag_id).first()
+    if not tag:
+        raise HTTPException(status_code=404, detail="Tag not found")
+        
+    if tag not in tx.tags:
+        tx.tags.append(tag)
+        db.commit()
+        
+    return {"message": "Tag added"}
+
+@router.delete("/{transaction_id}/tags/{tag_id}")
+def remove_tag_from_transaction(transaction_id: int, tag_id: int, db: Session = Depends(get_db)):
+    tx = db.query(Transaction).filter(Transaction.id == transaction_id).first()
+    if not tx:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+        
+    tag = db.query(Tag).filter(Tag.id == tag_id).first()
+    if not tag or tag not in tx.tags:
+        raise HTTPException(status_code=404, detail="Tag not found on transaction")
+        
+    tx.tags.remove(tag)
+    db.commit()
+    return {"message": "Tag removed"}

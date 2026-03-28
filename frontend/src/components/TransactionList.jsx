@@ -14,9 +14,15 @@ const TransactionList = () => {
   const [editingTxId, setEditingTxId] = useState(null);
   const [categorySearch, setCategorySearch] = useState('');
 
-  // Fetch categories on mount
+  const [tags, setTags] = useState([]);
+  const [editingTagTxId, setEditingTagTxId] = useState(null);
+  const [tagSearch, setTagSearch] = useState('');
+  const [filterTag, setFilterTag] = useState('');
+
+  // Fetch categories & tags on mount
   useEffect(() => {
     api.get('/categories').then(res => setCategories(res.data)).catch(console.error);
+    api.get('/tags').then(res => setTags(res.data)).catch(console.error);
   }, []);
 
   const handleUpdateCategory = async (txId, categoryId, categoryName) => {
@@ -61,10 +67,58 @@ const TransactionList = () => {
     }
   };
 
+  const handleAddTag = async (txId, tagId, tagName) => {
+    try {
+      await api.post(`/transactions/${txId}/tags/${tagId}`);
+      setTransactions(prev => prev.map(t => {
+        if (t.id === txId) {
+          const currentTags = t.tags || [];
+          if (!currentTags.find(tag => tag.id === tagId)) {
+            return { ...t, tags: [...currentTags, { id: tagId, name: tagName }] };
+          }
+        }
+        return t;
+      }));
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setEditingTagTxId(null);
+      setTagSearch('');
+    }
+  };
+
+  const handleCreateTag = async (txId, newTagName) => {
+    try {
+      const res = await api.post('/tags', { name: newTagName });
+      const newTag = res.data;
+      if (!tags.find(t => t.id === newTag.id)) {
+        setTags(prev => [...prev, newTag]);
+      }
+      handleAddTag(txId, newTag.id, newTag.name);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleRemoveTag = async (txId, tagId) => {
+    try {
+      await api.delete(`/transactions/${txId}/tags/${tagId}`);
+      setTransactions(prev => prev.map(t => {
+        if (t.id === txId && t.tags) {
+          return { ...t, tags: t.tags.filter(tag => tag.id !== tagId) };
+        }
+        return t;
+      }));
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   const fetchTransactions = async () => {
     try {
       setLoading(true);
-      const res = await api.get(`/transactions?skip=${skip}&limit=${limit}&search=${search}`);
+      const tagParam = filterTag ? `&tag=${encodeURIComponent(filterTag)}` : '';
+      const res = await api.get(`/transactions?skip=${skip}&limit=${limit}&search=${search}${tagParam}`);
       setTransactions(res.data.items);
       setTotal(res.data.total);
     } catch (err) {
@@ -76,7 +130,7 @@ const TransactionList = () => {
 
   useEffect(() => {
     fetchTransactions();
-  }, [skip, search]);
+  }, [skip, search, filterTag]);
 
   const handleSearch = (e) => {
     setSearch(e.target.value);
@@ -92,15 +146,30 @@ const TransactionList = () => {
       <div className="page-header">
         <h1 className="page-title">Transactions</h1>
         
-        <div style={{ display: 'flex', alignItems: 'center', backgroundColor: 'var(--card-bg)', border: '1px solid var(--border-color)', borderRadius: '0.5rem', padding: '0.5rem 1rem' }}>
-           <Search size={18} color="var(--text-muted)" />
-           <input 
-             type="text" 
-             placeholder="Search description..." 
-             value={search}
-             onChange={handleSearch}
-             style={{ background: 'transparent', border: 'none', color: 'white', outline: 'none', marginLeft: '0.5rem' }}
-           />
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', backgroundColor: 'var(--card-bg)', border: '1px solid var(--border-color)', borderRadius: '0.5rem', padding: '0.5rem 1rem' }}>
+             <Search size={18} color="var(--text-muted)" />
+             <input 
+               type="text" 
+               placeholder="Search description..." 
+               value={search}
+               onChange={handleSearch}
+               style={{ background: 'transparent', border: 'none', color: 'white', outline: 'none', marginLeft: '0.5rem' }}
+             />
+          </div>
+          
+          <div style={{ display: 'flex', alignItems: 'center', backgroundColor: 'var(--card-bg)', border: '1px solid var(--border-color)', borderRadius: '0.5rem', padding: '0.5rem 1rem' }}>
+             <select 
+               value={filterTag} 
+               onChange={(e) => { setFilterTag(e.target.value); setSkip(0); }}
+               style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', outline: 'none', cursor: 'pointer' }}
+             >
+               <option value="">All Tags</option>
+               {tags.map(tag => (
+                 <option key={tag.id} value={tag.name}>#{tag.name}</option>
+               ))}
+             </select>
+          </div>
         </div>
       </div>
       
@@ -123,7 +192,41 @@ const TransactionList = () => {
                   {transactions.map(t => (
                     <tr key={t.id}>
                       <td>{formatDate(t.execution_date)}</td>
-                      <td>{t.description}</td>
+                      <td>
+                        <div style={{ fontWeight: '500' }}>{t.description}</div>
+                        <div style={{ display: 'flex', gap: '4px', marginTop: '4px', flexWrap: 'wrap' }}>
+                          {t.tags && t.tags.map(tag => (
+                             <span key={tag.id} style={{ display: 'inline-flex', alignItems: 'center', backgroundColor: 'rgba(139, 92, 246, 0.2)', color: '#a78bfa', padding: '2px 6px', borderRadius: '4px', fontSize: '0.7rem' }}>
+                                #{tag.name}
+                                <button onClick={() => handleRemoveTag(t.id, tag.id)} style={{ background: 'none', border: 'none', color: 'inherit', marginLeft: '4px', cursor: 'pointer', padding: 0 }}>&times;</button>
+                             </span>
+                          ))}
+                          {editingTagTxId === t.id ? (
+                            <div style={{ position: 'relative' }}>
+                              <input 
+                                type="text"
+                                autoFocus
+                                value={tagSearch}
+                                onChange={e => setTagSearch(e.target.value)}
+                                placeholder="Tag..."
+                                style={{ width: '80px', padding: '2px 4px', fontSize: '0.7rem', backgroundColor: 'var(--card-bg)', color: 'white', border: '1px solid var(--border-color)', outline: 'none', borderRadius: '4px' }}
+                                onBlur={() => setTimeout(() => setEditingTagTxId(null), 200)}
+                                onKeyDown={e => {
+                                  if (e.key === 'Enter' && tagSearch) {
+                                    const existing = tags.find(tg => tg.name.toLowerCase() === tagSearch.toLowerCase());
+                                    if (existing) handleAddTag(t.id, existing.id, existing.name);
+                                    else handleCreateTag(t.id, tagSearch);
+                                  } else if (e.key === 'Escape') {
+                                    setEditingTagTxId(null);
+                                  }
+                                }}
+                              />
+                            </div>
+                          ) : (
+                            <span onClick={() => { setEditingTagTxId(t.id); setTagSearch(''); }} style={{ cursor: 'pointer', fontSize: '0.7rem', color: 'var(--text-muted)', border: '1px dashed var(--text-muted)', borderRadius: '4px', padding: '2px 6px' }}>+ tag</span>
+                          )}
+                        </div>
+                      </td>
                       <td style={{ position: 'relative' }}>
                         {editingTxId === t.id ? (
                           <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 50, backgroundColor: 'var(--card-bg)', border: '1px solid var(--border-color)', borderRadius: '0.5rem', padding: '0.5rem', width: '220px', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.5)' }}>
