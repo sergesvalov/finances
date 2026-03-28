@@ -22,15 +22,22 @@ const Categories = () => {
   const fetchData = async () => {
     setLoading(true);
     try {
+      console.log("Fetching categories and groups...");
       const [catRes, grpRes] = await Promise.all([
         api.get('/categories'),
         api.get('/categories/groups')
       ]);
+      console.log("Categories response count:", catRes.data?.length);
+      console.log("Groups response count:", grpRes.data?.length);
       setCategories(catRes.data);
       setGroups(grpRes.data);
     } catch (err) {
-      console.error(err);
-      setError('Failed to fetch data.');
+      console.error("fetchData error:", err);
+      if (err.response) {
+        console.error("Error data:", err.response.data);
+        console.error("Error status:", err.response.status);
+      }
+      setError(`Failed to fetch data: ${err.message || 'Unknown error'}`);
     } finally {
       setLoading(false);
     }

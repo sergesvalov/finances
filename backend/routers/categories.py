@@ -4,6 +4,9 @@ from database import get_db
 from models import Category, Transaction, CategoryGroup
 from pydantic import BaseModel
 from typing import Optional
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/categories", tags=["Categories"])
 
@@ -12,8 +15,13 @@ class CategoryGroupCreate(BaseModel):
 
 @router.get("/groups")
 def get_groups(db: Session = Depends(get_db)):
-    groups = db.query(CategoryGroup).order_by(CategoryGroup.name.asc()).all()
-    return [{"id": g.id, "name": g.name} for g in groups]
+    try:
+        groups = db.query(CategoryGroup).order_by(CategoryGroup.name.asc()).all()
+        logger.info(f"Fetched {len(groups)} category groups")
+        return [{"id": g.id, "name": g.name} for g in groups]
+    except Exception as e:
+        logger.error(f"Failed to fetch category groups: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to fetch category groups")
 
 @router.post("/groups")
 def create_group(group: CategoryGroupCreate, db: Session = Depends(get_db)):
@@ -36,16 +44,19 @@ def delete_group(group_id: int, db: Session = Depends(get_db)):
     db.commit()
     return {"message": "Group deleted"}
 
-router = APIRouter(prefix="/api/categories", tags=["Categories"])
-
 class CategoryCreate(BaseModel):
     name: str
     group_id: Optional[int] = None
 
 @router.get("")
 def get_categories(db: Session = Depends(get_db)):
-    categories = db.query(Category).order_by(Category.name.asc()).all()
-    return [{"id": c.id, "name": c.name, "group_id": c.group_id} for c in categories]
+    try:
+        categories = db.query(Category).order_by(Category.name.asc()).all()
+        logger.info(f"Fetched {len(categories)} categories")
+        return [{"id": c.id, "name": c.name, "group_id": c.group_id} for c in categories]
+    except Exception as e:
+        logger.error(f"Failed to fetch categories: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to fetch categories")
 
 @router.post("")
 def create_category(cat: CategoryCreate, db: Session = Depends(get_db)):
