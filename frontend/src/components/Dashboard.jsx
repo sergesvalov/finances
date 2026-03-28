@@ -147,6 +147,21 @@ const Dashboard = () => {
 
   const totalSpent = data.category_spending.reduce((acc, curr) => acc + curr.value, 0);
 
+  const calculateChange = (current, previous) => {
+    if (!previous) return null;
+    const diff = current - previous;
+    const percent = (diff / previous) * 100;
+    return {
+      value: percent,
+      isPositive: percent > 0,
+      isNegative: percent < 0,
+      text: `${Math.abs(percent).toFixed(1)}%`
+    };
+  };
+
+  const incomeChange = calculateChange(data.total_income || 0, data.previous_total_income);
+  const expenseChange = calculateChange(totalSpent, data.previous_total_expenses);
+
   const flatCategories = data.category_spending.reduce((acc, group) => {
     if (group.subcategories && group.subcategories.length > 0) {
       return [...acc, ...group.subcategories];
@@ -213,8 +228,15 @@ const Dashboard = () => {
              <ArrowUpRight color="var(--success)" size={32} />
            </div>
            <div>
-             <p className="text-muted" style={{ fontSize: '0.875rem', fontWeight: '500' }}>Total Income</p>
-             <h2 style={{ fontSize: '1.75rem', margin: 0 }}>€{(data.total_income || 0).toFixed(2)}</h2>
+             <p className="text-muted" style={{ fontSize: '0.875rem', fontWeight: '500', margin: '0 0 0.25rem 0' }}>Total Income</p>
+             <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.75rem' }}>
+               <h2 style={{ fontSize: '1.75rem', margin: 0 }}>€{(data.total_income || 0).toFixed(2)}</h2>
+               {incomeChange && (
+                 <span style={{ fontSize: '0.875rem', fontWeight: '500', color: incomeChange.isPositive ? 'var(--success)' : 'var(--danger)' }} title="vs previous month">
+                   {incomeChange.isPositive ? '↑' : '↓'} {incomeChange.text}
+                 </span>
+               )}
+             </div>
            </div>
         </div>
 
@@ -223,8 +245,15 @@ const Dashboard = () => {
              <ArrowDownRight color="var(--danger)" size={32} />
            </div>
            <div>
-             <p className="text-muted" style={{ fontSize: '0.875rem', fontWeight: '500' }}>Total Expenses</p>
-             <h2 style={{ fontSize: '1.75rem', margin: 0 }}>€{totalSpent.toFixed(2)}</h2>
+             <p className="text-muted" style={{ fontSize: '0.875rem', fontWeight: '500', margin: '0 0 0.25rem 0' }}>Total Expenses</p>
+             <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.75rem' }}>
+               <h2 style={{ fontSize: '1.75rem', margin: 0 }}>€{totalSpent.toFixed(2)}</h2>
+               {expenseChange && (
+                 <span style={{ fontSize: '0.875rem', fontWeight: '500', color: expenseChange.isPositive ? 'var(--danger)' : 'var(--success)' }} title="vs previous month">
+                   {expenseChange.isPositive ? '↑' : '↓'} {expenseChange.text}
+                 </span>
+               )}
+             </div>
            </div>
         </div>
       </div>

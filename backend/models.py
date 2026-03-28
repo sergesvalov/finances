@@ -15,12 +15,22 @@ class TelegramRecipient(Base):
     telegram_id = Column(String, unique=True, index=True)
     name = Column(String)
 
+class CategoryGroup(Base):
+    __tablename__ = "category_groups"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, unique=True, index=True)
+
+    categories = relationship("Category", back_populates="group")
+
 class Category(Base):
     __tablename__ = "categories"
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, unique=True, index=True)
+    group_id = Column(Integer, ForeignKey("category_groups.id"), nullable=True)
 
+    group = relationship("CategoryGroup", back_populates="categories")
     transactions = relationship("Transaction", back_populates="category")
 
 

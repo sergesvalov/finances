@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from database import get_db
-from models import Transaction, Category, Setting, TelegramRecipient
+from models import Transaction, Category, CategoryGroup, Setting, TelegramRecipient
 import pandas as pd
 from typing import Optional
 from datetime import datetime
@@ -17,12 +17,19 @@ router = APIRouter(prefix="/api/analytics", tags=["Analytics"])
 def get_analytics_summary(month: Optional[str] = Query(None), db: Session = Depends(get_db)):
     # Calculate start and end dates if month is provided
     start_date, end_date = None, None
+    prev_start_date, prev_end_date = None, None
     if month:
         try:
             year, m = map(int, month.split('-'))
             last_day = calendar.monthrange(year, m)[1]
             start_date = datetime(year, m, 1)
             end_date = datetime(year, m, last_day, 23, 59, 59)
+            
+            prev_year = year if m > 1 else year - 1
+            prev_m = m - 1 if m > 1 else 12
+            prev_last_day = calendar.monthrange(prev_year, prev_m)[1]
+            prev_start_date = datetime(prev_year, prev_m, 1)
+            prev_end_date = datetime(prev_year, prev_m, prev_last_day, 23, 59, 59)
         except ValueError:
             pass
 
@@ -53,18 +60,19 @@ def get_analytics_summary(month: Optional[str] = Query(None), db: Session = Depe
     
     # Category spending for the selected period
     category_spending = []
-    cat_query = db.query(Category.name, func.sum(Transaction.amount).label("total_amount")) \
+    cat_query = db.query(Category.name, CategoryGroup.name.label("group_name"), func.sum(Transaction.amount).label("total_amount")) \
         .join(Transaction) \
+        .outerjoin(CategoryGroup, Category.group_id == CategoryGroup.id) \
         .filter(Transaction.amount < 0)
         
     if start_date and end_date:
         cat_query = cat_query.filter(Transaction.execution_date >= start_date, Transaction.execution_date <= end_date)
         
-    cat_query = cat_query.group_by(Category.name).all()
+    cat_query = cat_query.group_by(Category.name, CategoryGroup.name).all()
         
     raw_categories = []
-    for name, total in cat_query:
-        raw_categories.append({"name": name, "value": abs(float(total))})
+    for cat_name, group_name, total in cat_query:
+        raw_categories.append({"name": cat_name, "group": group_name or "Other expenses", "value": abs(float(total))})
 
     uncat_query = db.query(func.sum(Transaction.amount).label("total")) \
         .filter(Transaction.amount < 0, Transaction.category_id == None)
@@ -75,21 +83,11 @@ def get_analytics_summary(month: Optional[str] = Query(None), db: Session = Depe
     uncat_total = uncat_query.scalar()
 
     if uncat_total:
-         raw_categories.append({"name": "Uncategorized", "value": abs(float(uncat_total))})
+         raw_categories.append({"name": "Uncategorized", "group": "Uncategorized", "value": abs(float(uncat_total))})
          
-    def get_group(cat_name):
-        if cat_name == "Uncategorized": return "Uncategorized"
-        cat = cat_name.lower().strip()
-        if cat in ["delivery", "smart", "proteas bakery", "sklavenitis", "food", "supermarket", "groceries", "restaurants", "cafe"]:
-            return "Food"
-        elif cat in ["phone", "internet", "car gas", "bills", "utilities", "gas", "electricity", "water", "rent"]:
-            return "Bills"
-        else:
-            return "Other expenses"
-            
     grouped = {}
     for item in raw_categories:
-        g = get_group(item["name"])
+        g = item["group"]
         if g not in grouped:
             grouped[g] = {"name": g, "value": 0.0, "subcategories": []}
         grouped[g]["value"] += item["value"]
@@ -108,11 +106,23 @@ def get_analytics_summary(month: Optional[str] = Query(None), db: Session = Depe
         
     total_income = income_query.scalar() or 0.0
          
+    previous_total_expenses = 0.0
+    previous_total_income = 0.0
+    
+    if prev_start_date and prev_end_date:
+        prev_exp = db.query(func.sum(Transaction.amount)).filter(Transaction.amount < 0, Transaction.execution_date >= prev_start_date, Transaction.execution_date <= prev_end_date).scalar()
+        previous_total_expenses = abs(float(prev_exp)) if prev_exp else 0.0
+        
+        prev_inc = db.query(func.sum(Transaction.amount)).filter(Transaction.amount > 0, Transaction.execution_date >= prev_start_date, Transaction.execution_date <= prev_end_date).scalar()
+        previous_total_income = float(prev_inc) if prev_inc else 0.0
+        
     return {
         "available_months": available_months,
         "category_spending": category_spending,
         "balance_dynamics": balance_dynamics,
-        "total_income": float(total_income)
+        "total_income": float(total_income),
+        "previous_total_expenses": previous_total_expenses,
+        "previous_total_income": previous_total_income
     }
 
 class ReportRequest(BaseModel):
