@@ -116,13 +116,100 @@ def get_analytics_summary(month: Optional[str] = Query(None), db: Session = Depe
         prev_inc = db.query(func.sum(Transaction.amount)).filter(Transaction.amount > 0, Transaction.execution_date >= prev_start_date, Transaction.execution_date <= prev_end_date).scalar()
         previous_total_income = float(prev_inc) if prev_inc else 0.0
         
+    daily_expenses = []
+    if start_date and end_date:
+        exp_query = db.query(
+            func.date(Transaction.execution_date).label('day'),
+            func.sum(Transaction.amount).label('total')
+        ).filter(
+            Transaction.amount < 0,
+            Transaction.execution_date >= start_date,
+            Transaction.execution_date <= end_date
+        ).group_by(func.date(Transaction.execution_date)).all()
+        for d, t in exp_query:
+            daily_expenses.append({"date": str(d), "value": abs(float(t))})
+            
+    cumulative_spending = []
+    if start_date and end_date and prev_start_date:
+        days_in_month = (end_date - start_date).days + 1
+        curr_query = db.query(
+            func.extract('day', Transaction.execution_date).label('day'),
+            func.sum(Transaction.amount).label('total')
+        ).filter(
+            Transaction.amount < 0,
+            Transaction.execution_date >= start_date,
+            Transaction.execution_date <= end_date
+        ).group_by(func.extract('day', Transaction.execution_date)).all()
+        curr_map = {int(d): abs(float(t)) for d, t in curr_query}
+        prev_query = db.query(
+            func.extract('day', Transaction.execution_date).label('day'),
+            func.sum(Transaction.amount).label('total')
+        ).filter(
+            Transaction.amount < 0,
+            Transaction.execution_date >= prev_start_date,
+            Transaction.execution_date <= prev_end_date
+        ).group_by(func.extract('day', Transaction.execution_date)).all()
+        prev_map = {int(d): abs(float(t)) for d, t in prev_query}
+        
+        curr_cum = 0.0
+        prev_cum = 0.0
+        today_day = None
+        now = datetime.now()
+        if start_date.year == now.year and start_date.month == now.month:
+            today_day = now.day
+            
+        for day in range(1, days_in_month + 1):
+            curr_val = curr_map.get(day, 0.0)
+            prev_val = prev_map.get(day, 0.0)
+            curr_cum += curr_val
+            prev_cum += prev_val
+            item = {"day": day, "previous": prev_cum}
+            if today_day is None or day <= today_day:
+                item["current"] = curr_cum
+            cumulative_spending.append(item)
+            
+    nodes = []
+    links = []
+    node_idx = {}
+    
+    def get_node(name):
+        if name not in node_idx:
+            nodes.append({"name": name})
+            node_idx[name] = len(nodes) - 1
+        return node_idx[name]
+
+    total_spent = sum(g["value"] for g in category_spending)
+    total_inc = float(total_income)
+    
+    source_name = "Income"
+    if total_inc == 0 and total_spent > 0:
+        source_name = "Available Funds"
+    
+    source_idx = get_node(source_name)
+    
+    for g in category_spending:
+        g_idx = get_node(g["name"])
+        links.append({"source": source_idx, "target": g_idx, "value": g["value"]})
+        for sub in g["subcategories"]:
+            sub_idx = get_node(sub["name"])
+            links.append({"source": g_idx, "target": sub_idx, "value": sub["value"]})
+            
+    if source_name == "Income" and total_inc > total_spent:
+        savings_idx = get_node("Savings")
+        links.append({"source": source_idx, "target": savings_idx, "value": total_inc - total_spent})
+        
+    sankey_data = {"nodes": nodes, "links": links}
+
     return {
         "available_months": available_months,
         "category_spending": category_spending,
         "balance_dynamics": balance_dynamics,
         "total_income": float(total_income),
         "previous_total_expenses": previous_total_expenses,
-        "previous_total_income": previous_total_income
+        "previous_total_income": previous_total_income,
+        "daily_expenses": daily_expenses,
+        "cumulative_spending": cumulative_spending,
+        "sankey_data": sankey_data
     }
 
 class ReportRequest(BaseModel):

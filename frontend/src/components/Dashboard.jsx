@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Legend } from 'recharts';
+import { PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Legend, Sankey } from 'recharts';
 import { ArrowUpRight, ArrowDownRight, Wallet, Activity, Calendar, X, Send } from 'lucide-react';
 import api from '../api';
 
@@ -323,6 +323,101 @@ const Dashboard = () => {
               </ResponsiveContainer>
             </div>
           </div>
+        </div>
+
+        {/* Row 2: Sankey & Cumulative */}
+        <div className="dashboard-grid" style={{ gridTemplateColumns: '1fr 1fr', marginTop: '1.5rem' }}>
+          <div className="card chart-card" style={{ height: '400px' }}>
+            <h3 style={{ marginBottom: '1.5rem' }}>Cash Flow (Sankey)</h3>
+            <div style={{ flex: 1, minHeight: 0 }}>
+              {data.sankey_data && data.sankey_data.nodes.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <Sankey
+                    data={data.sankey_data}
+                    node={{ stroke: 'var(--border-color)', strokeWidth: 1 }}
+                    nodePadding={50}
+                    margin={{ top: 10, right: 20, bottom: 10, left: 20 }}
+                    link={{ stroke: 'var(--primary)', strokeOpacity: 0.2 }}
+                  >
+                    <RechartsTooltip contentStyle={{ backgroundColor: 'var(--card-bg)', borderColor: 'var(--border-color)', borderRadius: '0.5rem' }} itemStyle={{ color: 'var(--text-main)' }} />
+                  </Sankey>
+                </ResponsiveContainer>
+              ) : (
+                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', color: 'var(--text-muted)' }}>Not enough data</div>
+              )}
+            </div>
+          </div>
+          
+          <div className="card chart-card" style={{ height: '400px' }}>
+            <h3 style={{ marginBottom: '1.5rem' }}>Cumulative Spending vs Prev Month</h3>
+            <div style={{ flex: 1, minHeight: 0 }}>
+              {data.cumulative_spending && data.cumulative_spending.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={data.cumulative_spending} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" vertical={false} />
+                    <XAxis dataKey="day" stroke="var(--text-muted)" fontSize={12} tickMargin={10} />
+                    <YAxis stroke="var(--text-muted)" fontSize={12} tickFormatter={(value) => `€${value}`} />
+                    <RechartsTooltip 
+                      formatter={(value) => `€${value.toFixed(2)}`} 
+                      contentStyle={{ backgroundColor: 'var(--card-bg)', borderColor: 'var(--border-color)', borderRadius: '0.5rem' }} 
+                      itemStyle={{ color: 'var(--text-main)' }}
+                    />
+                    <Line type="monotone" name="Current Month" dataKey="current" stroke="var(--danger)" strokeWidth={3} dot={false} activeDot={{ r: 6 }} />
+                    <Line type="monotone" name="Previous Month" dataKey="previous" stroke="var(--text-muted)" strokeWidth={2} strokeDasharray="5 5" dot={false} />
+                    <Legend />
+                  </LineChart>
+                </ResponsiveContainer>
+              ) : (
+                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', color: 'var(--text-muted)' }}>Not enough data</div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Row 3: Expense Heatmap */}
+        <div className="card" style={{ marginTop: '1.5rem' }}>
+           <h3 style={{ marginBottom: '1.5rem' }}>Daily Expense Heatmap</h3>
+           {!selectedMonth ? (
+             <div style={{ color: 'var(--text-muted)' }}>Please select a specific month to view the daily heatmap.</div>
+           ) : data.daily_expenses && data.daily_expenses.length > 0 ? (
+             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+               {(() => {
+                  const [year, m] = selectedMonth.split('-');
+                  const daysInMonth = new Date(year, parseInt(m, 10), 0).getDate();
+                  const expenseMap = data.daily_expenses.reduce((acc, curr) => {
+                     acc[parseInt(curr.date.split('-')[2], 10)] = curr.value;
+                     return acc;
+                  }, {});
+                  const maxExpense = Math.max(...data.daily_expenses.map(d => d.value), 1);
+                  return Array.from({length: daysInMonth}, (_, i) => i + 1).map(day => {
+                     const val = expenseMap[day] || 0;
+                     const intensity = val > 0 ? Math.max(0.2, val / maxExpense) : 0;
+                     return (
+                       <div key={day} 
+                         title={`Day ${day}: €${val.toFixed(2)}`}
+                         style={{
+                           width: '40px', height: '40px', 
+                           backgroundColor: intensity > 0 ? `rgba(239, 68, 68, ${intensity})` : 'rgba(255,255,255,0.05)',
+                           borderRadius: '4px',
+                           display: 'flex', justifyContent: 'center', alignItems: 'center',
+                           fontSize: '0.75rem',
+                           color: intensity > 0.5 ? '#fff' : 'var(--text-muted)',
+                           border: intensity > 0 ? '1px solid rgba(239,68,68,0.5)' : '1px solid transparent',
+                           transition: 'transform 0.1s ease',
+                           cursor: 'pointer'
+                         }}
+                         onMouseOver={e => e.currentTarget.style.transform = 'scale(1.1)'}
+                         onMouseOut={e => e.currentTarget.style.transform = 'scale(1)'}
+                       >
+                         {day}
+                       </div>
+                     );
+                  });
+               })()}
+             </div>
+           ) : (
+             <div style={{ color: 'var(--text-muted)' }}>No daily expense data available.</div>
+           )}
         </div>
 
         <div className="card" style={{ marginTop: '1.5rem' }}>
