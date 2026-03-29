@@ -49,6 +49,7 @@ def get_analytics_summary(month: Optional[str] = Query(None), db: Session = Depe
         
     tx_list = tx_query.all()
     balance_dynamics = []
+    income_expenses_dynamics = []
     if tx_list:
         df = pd.DataFrame([{
             "date": t.execution_date, 
@@ -57,6 +58,23 @@ def get_analytics_summary(month: Optional[str] = Query(None), db: Session = Depe
         df['day'] = df['date'].dt.strftime('%Y-%m-%d')
         balance_df = df.sort_values('date').groupby('day').last().reset_index()
         balance_dynamics = [{"date": row['day'], "balance": row['balance']} for _, row in balance_df.iterrows()]
+        
+    flow_tx_query = db.query(Transaction.execution_date, Transaction.amount)
+    if start_date and end_date:
+        flow_tx_query = flow_tx_query.filter(Transaction.execution_date >= start_date, Transaction.execution_date <= end_date)
+    flow_list = flow_tx_query.all()
+    
+    if flow_list:
+        flow_df = pd.DataFrame([{
+            "date": t.execution_date,
+            "amount": float(t.amount)
+        } for t in flow_list])
+        flow_df['day'] = flow_df['date'].dt.strftime('%Y-%m-%d')
+        flow_df['expense'] = flow_df['amount'].apply(lambda x: abs(x) if x < 0 else 0.0)
+        flow_df['income'] = flow_df['amount'].apply(lambda x: x if x > 0 else 0.0)
+        flow_grouped = flow_df.groupby('day')[['expense', 'income']].sum().reset_index()
+        income_expenses_dynamics = [{"date": row['day'], "expense": row['expense'], "income": row['income']} for _, row in flow_grouped.iterrows()]
+    
     
     # Category spending for the selected period
     category_spending = []
@@ -212,7 +230,8 @@ def get_analytics_summary(month: Optional[str] = Query(None), db: Session = Depe
         "previous_total_income": previous_total_income,
         "daily_expenses": daily_expenses,
         "cumulative_spending": cumulative_spending,
-        "sankey_data": sankey_data
+        "sankey_data": sankey_data,
+        "income_expenses_dynamics": income_expenses_dynamics
     }
 
 class ReportRequest(BaseModel):

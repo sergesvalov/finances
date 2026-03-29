@@ -342,22 +342,28 @@ const Dashboard = () => {
             </div>
           </div>
 
-          <div className="card chart-card">
-            <h3 style={{ marginBottom: '1.5rem' }}>Balance Dynamics</h3>
+          <div className="card chart-card" style={{ height: '520px' }}>
+            <h3 style={{ marginBottom: '1.5rem' }}>Income & Expenses Dynamics</h3>
             <div style={{ flex: 1, minHeight: 0 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={data.balance_dynamics} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" vertical={false} />
-                  <XAxis dataKey="date" stroke="var(--text-muted)" fontSize={12} tickMargin={10} />
-                  <YAxis stroke="var(--text-muted)" fontSize={12} tickFormatter={(value) => `€${value}`} />
-                  <RechartsTooltip 
-                    formatter={(value) => `€${value.toFixed(2)}`} 
-                    contentStyle={{ backgroundColor: 'var(--card-bg)', borderColor: 'var(--border-color)', borderRadius: '0.5rem' }} 
-                    itemStyle={{ color: 'var(--text-main)' }}
-                  />
-                  <Line type="monotone" dataKey="balance" stroke="var(--primary)" strokeWidth={3} dot={false} activeDot={{ r: 6 }} />
-                </LineChart>
-              </ResponsiveContainer>
+              {data.income_expenses_dynamics && data.income_expenses_dynamics.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={data.income_expenses_dynamics} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" vertical={false} />
+                    <XAxis dataKey="date" stroke="var(--text-muted)" fontSize={12} tickMargin={10} />
+                    <YAxis stroke="var(--text-muted)" fontSize={12} tickFormatter={(value) => `€${value}`} />
+                    <RechartsTooltip 
+                      formatter={(value) => `€${value.toFixed(2)}`} 
+                      contentStyle={{ backgroundColor: 'var(--card-bg)', borderColor: 'var(--border-color)', borderRadius: '0.5rem' }} 
+                      itemStyle={{ color: 'var(--text-main)' }}
+                    />
+                    <Legend verticalAlign="top" height={36}/>
+                    <Line type="monotone" name="Income" dataKey="income" stroke="var(--success)" strokeWidth={3} dot={false} activeDot={{ r: 6 }} />
+                    <Line type="monotone" name="Expenses" dataKey="expense" stroke="var(--danger)" strokeWidth={3} dot={false} activeDot={{ r: 6 }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              ) : (
+                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', color: 'var(--text-muted)' }}>Not enough data</div>
+              )}
             </div>
           </div>
         </div>
