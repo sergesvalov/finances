@@ -18,6 +18,7 @@ def get_transactions(
     category: Optional[str] = None,
     tag: Optional[str] = None,
     month: Optional[str] = None,
+    date: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
     query = db.query(Transaction)
@@ -41,6 +42,14 @@ def get_transactions(
             start_date = datetime(year, m, 1)
             end_date = datetime(year, m, last_day, 23, 59, 59)
             query = query.filter(Transaction.execution_date >= start_date, Transaction.execution_date <= end_date)
+        except ValueError:
+            pass
+            
+    if date:
+        try:
+            d = datetime.strptime(date, '%Y-%m-%d')
+            end_d = datetime(d.year, d.month, d.day, 23, 59, 59)
+            query = query.filter(Transaction.execution_date >= d, Transaction.execution_date <= end_d)
         except ValueError:
             pass
             

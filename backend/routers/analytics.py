@@ -253,7 +253,7 @@ def send_telegram_report(req: ReportRequest, db: Session = Depends(get_db)):
         
     message = "\n".join(lines)
     
-    raw_token = token_setting.value.strip()
+    raw_token = token_setting.value.strip().strip('"').strip("'").strip()
     # Handle if user pasted full URL
     if "api.telegram.org" in raw_token:
         import re
@@ -263,7 +263,10 @@ def send_telegram_report(req: ReportRequest, db: Session = Depends(get_db)):
             
     # Handle if user pasted "bot" prefix
     if raw_token.lower().startswith("bot"):
-        raw_token = raw_token[3:]
+        raw_token = raw_token[3:].strip()
+        
+    if ":" not in raw_token:
+        raise HTTPException(status_code=400, detail="Telegram Token format is invalid. It MUST contain a colon ':', e.g., '123456789:ABCDefgh...'. Please check your Settings.")
         
     url = f"https://api.telegram.org/bot{raw_token}/sendMessage"    
     success_count = 0

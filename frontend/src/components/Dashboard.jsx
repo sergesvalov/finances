@@ -19,6 +19,10 @@ const Dashboard = () => {
   const [categoryTransactions, setCategoryTransactions] = useState([]);
   const [loadingCategory, setLoadingCategory] = useState(false);
   
+  const [selectedDate, setSelectedDate] = useState(null);
+  const [dateTransactions, setDateTransactions] = useState([]);
+  const [loadingDate, setLoadingDate] = useState(false);
+  
   const [sendingReport, setSendingReport] = useState(false);
 
   const [categories, setCategories] = useState([]);
@@ -85,6 +89,30 @@ const Dashboard = () => {
       console.error(err);
     } finally {
       setLoadingCategory(false);
+    }
+  };
+
+  const handleDayClick = async (day) => {
+    const [year, m] = selectedMonth.split('-');
+    const dateStr = `${year}-${m}-${day.toString().padStart(2, '0')}`;
+    setSelectedDate(dateStr);
+    setLoadingDate(true);
+    
+    // Auto-scroll logic so users see the transactions appearing below
+    setTimeout(() => {
+      const el = document.getElementById('date-transactions-card');
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth' });
+      }
+    }, 50);
+
+    try {
+      const res = await api.get('/transactions', { params: { date: dateStr, limit: 100 } });
+      setDateTransactions(res.data.items);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingDate(false);
     }
   };
 
@@ -415,6 +443,7 @@ const Dashboard = () => {
                            transition: 'transform 0.1s ease',
                            cursor: 'pointer'
                          }}
+                         onClick={() => handleDayClick(day)}
                          onMouseOver={e => e.currentTarget.style.transform = 'scale(1.1)'}
                          onMouseOut={e => e.currentTarget.style.transform = 'scale(1)'}
                        >
@@ -664,6 +693,59 @@ const Dashboard = () => {
                             {t.category || 'Uncategorized'}
                           </span>
                         )}
+                      </td>
+                      <td style={{ padding: '0.75rem 0', textAlign: 'right', fontWeight: 500, color: t.amount < 0 ? 'var(--text-main)' : 'var(--success)' }}>
+                        €{Math.abs(t.amount).toFixed(2)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Inline Date Transactions */}
+      {selectedDate && (
+        <div id="date-transactions-card" className="card" style={{ marginTop: '1.5rem', scrollMarginTop: '2rem' }}>
+          <div style={{ paddingBottom: '1.5rem', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+            <h3 style={{ margin: 0 }}>Transactions on {selectedDate}</h3>
+            <button onClick={() => setSelectedDate(null)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '0.25rem' }}>
+              <X size={24} />
+            </button>
+          </div>
+          <div style={{ overflowX: 'auto' }}>
+            {loadingDate ? (
+              <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '2rem' }}>Loading transactions...</div>
+            ) : dateTransactions.length === 0 ? (
+               <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '2rem' }}>No transactions found.</div>
+            ) : (
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
+                <thead style={{ color: 'var(--text-muted)', borderBottom: '1px solid var(--border-color)' }}>
+                  <tr>
+                    <th style={{ textAlign: 'left', paddingBottom: '0.5rem', fontWeight: 500 }}>Time</th>
+                    <th style={{ textAlign: 'left', paddingBottom: '0.5rem', fontWeight: 500 }}>Description</th>
+                    <th style={{ textAlign: 'left', paddingBottom: '0.5rem', fontWeight: 500 }}>Category</th>
+                    <th style={{ textAlign: 'right', paddingBottom: '0.5rem', fontWeight: 500 }}>Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {dateTransactions.map(t => (
+                    <tr key={t.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                      <td style={{ padding: '0.75rem 0', color: 'var(--text-muted)' }}>{t.execution_date.split('T')[1]?.substring(0,5) || t.execution_date.split('T')[0]}</td>
+                      <td style={{ padding: '0.75rem 0.5rem' }}>{t.description}</td>
+                      <td style={{ padding: '0.75rem 0.5rem' }}>
+                          <span 
+                            style={{ 
+                              backgroundColor: 'rgba(255,255,255,0.1)', 
+                              padding: '0.25rem 0.5rem', 
+                              borderRadius: '1rem',
+                              fontSize: '0.75rem',
+                              display: 'inline-block'
+                            }}>
+                            {t.category || 'Uncategorized'}
+                          </span>
                       </td>
                       <td style={{ padding: '0.75rem 0', textAlign: 'right', fontWeight: 500, color: t.amount < 0 ? 'var(--text-main)' : 'var(--success)' }}>
                         €{Math.abs(t.amount).toFixed(2)}
