@@ -788,7 +788,7 @@ const Dashboard = () => {
                       <td style={{ padding: '0.75rem 0.5rem' }}>{t.description}</td>
                       <td style={{ padding: '0.75rem 0.5rem', position: 'relative' }}>
                         {editingTxId === t.id ? (
-                          <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 50, backgroundColor: 'var(--card-bg)', border: '1px solid var(--border-color)', borderRadius: '0.5rem', padding: '0.5rem', width: '220px', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.5)' }}>
+                          <div onClick={e => e.stopPropagation()} style={{ position: 'absolute', top: '100%', left: 0, zIndex: 50, backgroundColor: 'var(--card-bg)', border: '1px solid var(--border-color)', borderRadius: '0.5rem', padding: '0.5rem', width: '220px', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.5)' }}>
                             <input 
                               type="text" 
                               autoFocus
@@ -820,7 +820,7 @@ const Dashboard = () => {
                           </div>
                         ) : (
                           <span 
-                            onClick={() => { setEditingTxId(t.id); setCategorySearch(''); }}
+                            onClick={(e) => { e.stopPropagation(); setEditingTxId(t.id); setCategorySearch(''); }}
                             style={{ 
                               backgroundColor: 'rgba(255,255,255,0.1)', 
                               padding: '0.25rem 0.5rem', 
