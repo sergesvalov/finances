@@ -24,6 +24,7 @@ services:
       - db
     volumes:
       - ./backend:/app
+      - receipts_data:/app/receipts
 
   frontend:
     build: ./frontend
@@ -36,3 +37,4 @@ services:
 
 volumes:
   pgdata:
+  receipts_data:

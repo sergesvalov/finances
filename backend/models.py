@@ -60,6 +60,7 @@ class Transaction(Base):
     balance = Column(Numeric)
     category_id = Column(Integer, ForeignKey("categories.id"))
     original_hash = Column(String, unique=True, index=True)
+    receipt_path = Column(String, nullable=True)
 
     category = relationship("Category", back_populates="transactions")
     tags = relationship("Tag", secondary=transaction_tags, back_populates="transactions")

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Legend, Sankey } from 'recharts';
-import { ArrowUpRight, ArrowDownRight, Wallet, Activity, Calendar, X, Send } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, Wallet, Calendar, X, Send, Paperclip, Trash2, Upload, FileText } from 'lucide-react';
 import api from '../api';
 
 const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#14b8a6'];
@@ -28,6 +28,11 @@ const Dashboard = () => {
   const [categories, setCategories] = useState([]);
   const [editingTxId, setEditingTxId] = useState(null);
   const [categorySearch, setCategorySearch] = useState('');
+
+  // Receipt modal state
+  const [receiptModalTx, setReceiptModalTx] = useState(null);
+  const [uploadingReceipt, setUploadingReceipt] = useState(false);
+  const [deletingReceipt, setDeletingReceipt] = useState(false);
 
   useEffect(() => {
     api.get('/categories').then(res => setCategories(res.data)).catch(console.error);
@@ -162,6 +167,63 @@ const Dashboard = () => {
       handleUpdateTransactionCategory(txId, newCat.id, newCat.name);
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const BACKEND_BASE = import.meta.env.VITE_API_URL
+    ? import.meta.env.VITE_API_URL.replace(/\/api$/, '')
+    : '';
+
+  const getReceiptUrl = (receipt_path) =>
+    receipt_path ? `${BACKEND_BASE}/receipts/${receipt_path}` : null;
+
+  const handleOpenReceiptModal = (tx) => {
+    setReceiptModalTx({ ...tx });
+  };
+
+  const handleReceiptUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file || !receiptModalTx) return;
+    if (file.size > 15 * 1024 * 1024) {
+      alert('Файл слишком большой. Максимум 15 МБ.');
+      return;
+    }
+    setUploadingReceipt(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await import('axios').then(m => m.default.post(
+        `${BACKEND_BASE}/api/transactions/${receiptModalTx.id}/receipt`,
+        formData,
+        { headers: { 'Content-Type': 'multipart/form-data' } }
+      ));
+      const updatedTx = { ...receiptModalTx, receipt_path: res.data.receipt_path };
+      setReceiptModalTx(updatedTx);
+      setCategoryTransactions(prev => prev.map(t => t.id === updatedTx.id ? updatedTx : t));
+      setDateTransactions(prev => prev.map(t => t.id === updatedTx.id ? updatedTx : t));
+    } catch (err) {
+      alert(err.response?.data?.detail || 'Ошибка загрузки файла');
+    } finally {
+      setUploadingReceipt(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleReceiptDelete = async () => {
+    if (!receiptModalTx?.receipt_path) return;
+    setDeletingReceipt(true);
+    try {
+      await import('axios').then(m => m.default.delete(
+        `${BACKEND_BASE}/api/transactions/${receiptModalTx.id}/receipt`
+      ));
+      const updatedTx = { ...receiptModalTx, receipt_path: null };
+      setReceiptModalTx(updatedTx);
+      setCategoryTransactions(prev => prev.map(t => t.id === updatedTx.id ? updatedTx : t));
+      setDateTransactions(prev => prev.map(t => t.id === updatedTx.id ? updatedTx : t));
+    } catch (err) {
+      alert(err.response?.data?.detail || 'Ошибка удаления файла');
+    } finally {
+      setDeletingReceipt(false);
     }
   };
 
@@ -646,11 +708,17 @@ const Dashboard = () => {
                     <th style={{ textAlign: 'left', paddingBottom: '0.5rem', fontWeight: 500 }}>Description</th>
                     <th style={{ textAlign: 'left', paddingBottom: '0.5rem', fontWeight: 500 }}>Category</th>
                     <th style={{ textAlign: 'right', paddingBottom: '0.5rem', fontWeight: 500 }}>Amount</th>
+                    <th style={{ textAlign: 'center', paddingBottom: '0.5rem', fontWeight: 500, width: '40px' }}></th>
                   </tr>
                 </thead>
                 <tbody>
                   {categoryTransactions.map(t => (
-                    <tr key={t.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                    <tr key={t.id}
+                      onClick={() => handleOpenReceiptModal(t)}
+                      style={{ borderBottom: '1px solid var(--border-color)', cursor: 'pointer', transition: 'background 0.15s' }}
+                      onMouseOver={e => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.04)'}
+                      onMouseOut={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                    >
                       <td style={{ padding: '0.75rem 0', color: 'var(--text-muted)' }}>{t.execution_date.split('T')[0]}</td>
                       <td style={{ padding: '0.75rem 0.5rem' }}>{t.description}</td>
                       <td style={{ padding: '0.75rem 0.5rem', position: 'relative' }}>
@@ -702,6 +770,13 @@ const Dashboard = () => {
                       </td>
                       <td style={{ padding: '0.75rem 0', textAlign: 'right', fontWeight: 500, color: t.amount < 0 ? 'var(--text-main)' : 'var(--success)' }}>
                         €{Math.abs(t.amount).toFixed(2)}
+                      </td>
+                      <td style={{ padding: '0.75rem 0', textAlign: 'center', width: '32px' }}
+                        onClick={e => { e.stopPropagation(); handleOpenReceiptModal(t); }}
+                      >
+                        {t.receipt_path
+                          ? <Paperclip size={14} color="var(--primary)" title="Чек прикреплён" />
+                          : <Paperclip size={14} color="rgba(255,255,255,0.2)" title="Прикрепить чек" />}
                       </td>
                     </tr>
                   ))}
@@ -761,6 +836,134 @@ const Dashboard = () => {
                 </tbody>
               </table>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Receipt Modal */}
+      {receiptModalTx && (
+        <div
+          onClick={e => { if (e.target === e.currentTarget) setReceiptModalTx(null); }}
+          style={{
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+            backgroundColor: 'rgba(0,0,0,0.75)', zIndex: 2000,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            backdropFilter: 'blur(4px)', padding: '1rem'
+          }}
+        >
+          <div className="card" style={{
+            width: '100%', maxWidth: '540px', backgroundColor: 'var(--card-bg)',
+            border: '1px solid var(--border-color)', borderRadius: '1rem',
+            boxShadow: '0 30px 60px -12px rgba(0,0,0,0.6)', position: 'relative', overflow: 'hidden'
+          }}>
+            {/* Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.25rem' }}>
+              <div style={{ flex: 1, paddingRight: '1rem' }}>
+                <h3 style={{ margin: '0 0 0.25rem 0', fontSize: '1.1rem' }}>{receiptModalTx.description}</h3>
+                <div style={{ display: 'flex', gap: '1rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                  <span>{receiptModalTx.execution_date.split('T')[0]}</span>
+                  <span style={{ backgroundColor: 'rgba(255,255,255,0.1)', padding: '0.1rem 0.5rem', borderRadius: '1rem' }}>
+                    {receiptModalTx.category || 'Без категории'}
+                  </span>
+                  <span style={{ color: receiptModalTx.amount < 0 ? 'var(--text-main)' : 'var(--success)', fontWeight: 600 }}>
+                    €{Math.abs(receiptModalTx.amount).toFixed(2)}
+                  </span>
+                </div>
+              </div>
+              <button onClick={() => setReceiptModalTx(null)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '0.25rem', flexShrink: 0 }}>
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Divider */}
+            <div style={{ borderTop: '1px solid var(--border-color)', marginBottom: '1.25rem' }} />
+
+            {/* Receipt area */}
+            <div style={{ marginBottom: '1.25rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                <Paperclip size={16} color="var(--primary)" />
+                <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>Чек</span>
+              </div>
+
+              {receiptModalTx.receipt_path ? (
+                <div style={{ position: 'relative' }}>
+                  {/* Image preview */}
+                  {/\.(jpe?g|png|gif|webp|bmp)$/i.test(receiptModalTx.receipt_path) ? (
+                    <a href={getReceiptUrl(receiptModalTx.receipt_path)} target="_blank" rel="noreferrer">
+                      <img
+                        src={getReceiptUrl(receiptModalTx.receipt_path)}
+                        alt="Чек"
+                        style={{
+                          width: '100%', maxHeight: '380px', objectFit: 'contain',
+                          borderRadius: '0.5rem', border: '1px solid var(--border-color)',
+                          backgroundColor: 'rgba(0,0,0,0.2)', cursor: 'zoom-in'
+                        }}
+                      />
+                    </a>
+                  ) : (
+                    /* PDF */
+                    <a
+                      href={getReceiptUrl(receiptModalTx.receipt_path)}
+                      target="_blank" rel="noreferrer"
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: '0.75rem',
+                        padding: '1rem', borderRadius: '0.5rem',
+                        border: '1px solid var(--border-color)',
+                        backgroundColor: 'rgba(239,68,68,0.08)',
+                        color: 'var(--text-main)', textDecoration: 'none'
+                      }}
+                    >
+                      <FileText size={32} color="#ef4444" />
+                      <span style={{ fontSize: '0.875rem' }}>Открыть PDF чек</span>
+                    </a>
+                  )}
+
+                  {/* Delete button */}
+                  <button
+                    onClick={handleReceiptDelete}
+                    disabled={deletingReceipt}
+                    title="Удалить чек"
+                    style={{
+                      position: 'absolute', top: '8px', right: '8px',
+                      background: 'rgba(0,0,0,0.6)', border: 'none',
+                      borderRadius: '50%', width: '32px', height: '32px',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      cursor: deletingReceipt ? 'wait' : 'pointer', color: '#ef4444'
+                    }}
+                  >
+                    {deletingReceipt ? '…' : <Trash2 size={15} />}
+                  </button>
+                </div>
+              ) : (
+                <div style={{
+                  border: '2px dashed var(--border-color)', borderRadius: '0.75rem',
+                  padding: '2rem', textAlign: 'center', color: 'var(--text-muted)'
+                }}>
+                  <Paperclip size={28} style={{ marginBottom: '0.5rem', opacity: 0.4 }} />
+                  <p style={{ margin: '0 0 0.25rem 0', fontSize: '0.875rem' }}>Чек не прикреплён</p>
+                  <p style={{ margin: 0, fontSize: '0.75rem', opacity: 0.6 }}>Загрузите фото или PDF чека</p>
+                </div>
+              )}
+            </div>
+
+            {/* Upload button */}
+            <label style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
+              padding: '0.75rem', borderRadius: '0.5rem',
+              background: uploadingReceipt ? 'rgba(99,102,241,0.3)' : 'var(--primary)',
+              color: 'white', cursor: uploadingReceipt ? 'wait' : 'pointer',
+              fontWeight: 500, fontSize: '0.875rem', transition: 'opacity 0.2s'
+            }}>
+              <Upload size={16} />
+              {uploadingReceipt ? 'Загрузка...' : receiptModalTx.receipt_path ? 'Заменить чек' : 'Прикрепить чек'}
+              <input
+                type="file"
+                accept="image/*,application/pdf"
+                style={{ display: 'none' }}
+                onChange={handleReceiptUpload}
+                disabled={uploadingReceipt}
+              />
+            </label>
           </div>
         </div>
       )}
