@@ -49,6 +49,19 @@ class Category(Base):
     transactions = relationship("Transaction", back_populates="category")
 
 
+class TransactionSplit(Base):
+    __tablename__ = "transaction_splits"
+
+    id = Column(Integer, primary_key=True, index=True)
+    transaction_id = Column(Integer, ForeignKey("transactions.id"), nullable=False, index=True)
+    category_id = Column(Integer, ForeignKey("categories.id"), nullable=True)
+    amount = Column(Numeric, nullable=False)
+    note = Column(String, nullable=True)
+
+    transaction = relationship("Transaction", back_populates="splits")
+    category = relationship("Category")
+
+
 class Transaction(Base):
     __tablename__ = "transactions"
 
@@ -64,3 +77,4 @@ class Transaction(Base):
 
     category = relationship("Category", back_populates="transactions")
     tags = relationship("Tag", secondary=transaction_tags, back_populates="transactions")
+    splits = relationship("TransactionSplit", back_populates="transaction", cascade="all, delete-orphan")

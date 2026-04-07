@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Legend, Sankey } from 'recharts';
-import { ArrowUpRight, ArrowDownRight, Wallet, Calendar, X, Send, Paperclip, Trash2, Upload, FileText } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, Wallet, Calendar, X, Send, Paperclip, Trash2, Upload, FileText, SplitSquareHorizontal, Plus, Save } from 'lucide-react';
 import api from '../api';
 
 const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#14b8a6'];
@@ -29,10 +29,15 @@ const Dashboard = () => {
   const [editingTxId, setEditingTxId] = useState(null);
   const [categorySearch, setCategorySearch] = useState('');
 
-  // Receipt modal state
+  // Transaction detail modal state
   const [receiptModalTx, setReceiptModalTx] = useState(null);
+  const [modalTab, setModalTab] = useState('receipt'); // 'receipt' | 'splits'
   const [uploadingReceipt, setUploadingReceipt] = useState(false);
   const [deletingReceipt, setDeletingReceipt] = useState(false);
+
+  // Splits state
+  const [splitRows, setSplitRows] = useState([]); // [{category_id, category, amount, note}]
+  const [savingSplits, setSavingSplits] = useState(false);
 
   useEffect(() => {
     api.get('/categories').then(res => setCategories(res.data)).catch(console.error);
@@ -179,6 +184,66 @@ const Dashboard = () => {
 
   const handleOpenReceiptModal = (tx) => {
     setReceiptModalTx({ ...tx });
+    setModalTab('receipt');
+    // Load existing splits from transaction data
+    setSplitRows((tx.splits || []).map(s => ({ ...s, amount: Math.abs(s.amount) })));
+  };
+
+  const addSplitRow = () => {
+    setSplitRows(prev => [...prev, { category_id: null, category: null, amount: '', note: '' }]);
+  };
+
+  const updateSplitRow = (idx, field, value) => {
+    setSplitRows(prev => prev.map((r, i) => i === idx ? { ...r, [field]: value } : r));
+  };
+
+  const removeSplitRow = (idx) => {
+    setSplitRows(prev => prev.filter((_, i) => i !== idx));
+  };
+
+  const handleSaveSplits = async () => {
+    if (!receiptModalTx) return;
+    setSavingSplits(true);
+    try {
+      const payload = {
+        splits: splitRows
+          .filter(r => r.amount !== '' && parseFloat(r.amount) > 0)
+          .map(r => ({
+            category_id: r.category_id || null,
+            amount: parseFloat(r.amount),
+            note: r.note || null,
+          }))
+      };
+      await api.put(`/transactions/${receiptModalTx.id}/splits`, payload);
+      // Update local transaction with new splits
+      const updatedSplits = payload.splits.map((s, i) => ({
+        ...s,
+        id: splitRows.filter(r => r.amount !== '' && parseFloat(r.amount) > 0)[i]?.id,
+        category: splitRows.filter(r => r.amount !== '' && parseFloat(r.amount) > 0)[i]?.category,
+      }));
+      const updatedTx = { ...receiptModalTx, splits: updatedSplits };
+      setReceiptModalTx(updatedTx);
+      setCategoryTransactions(prev => prev.map(t => t.id === updatedTx.id ? updatedTx : t));
+      setDateTransactions(prev => prev.map(t => t.id === updatedTx.id ? updatedTx : t));
+    } catch (err) {
+      alert(err.response?.data?.detail || 'Ошибка сохранения разбивки');
+    } finally {
+      setSavingSplits(false);
+    }
+  };
+
+  const handleDeleteSplits = async () => {
+    if (!receiptModalTx) return;
+    try {
+      await api.delete(`/transactions/${receiptModalTx.id}/splits`);
+      setSplitRows([]);
+      const updatedTx = { ...receiptModalTx, splits: [] };
+      setReceiptModalTx(updatedTx);
+      setCategoryTransactions(prev => prev.map(t => t.id === updatedTx.id ? updatedTx : t));
+      setDateTransactions(prev => prev.map(t => t.id === updatedTx.id ? updatedTx : t));
+    } catch (err) {
+      alert(err.response?.data?.detail || 'Ошибка удаления разбивки');
+    }
   };
 
   const handleReceiptUpload = async (e) => {
@@ -852,118 +917,226 @@ const Dashboard = () => {
           }}
         >
           <div className="card" style={{
-            width: '100%', maxWidth: '540px', backgroundColor: 'var(--card-bg)',
+            width: '100%', maxWidth: '680px', backgroundColor: 'var(--card-bg)',
             border: '1px solid var(--border-color)', borderRadius: '1rem',
-            boxShadow: '0 30px 60px -12px rgba(0,0,0,0.6)', position: 'relative', overflow: 'hidden'
+            boxShadow: '0 30px 60px -12px rgba(0,0,0,0.6)', position: 'relative',
+            maxHeight: '90vh', display: 'flex', flexDirection: 'column'
           }}>
             {/* Header */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.25rem' }}>
-              <div style={{ flex: 1, paddingRight: '1rem' }}>
-                <h3 style={{ margin: '0 0 0.25rem 0', fontSize: '1.1rem' }}>{receiptModalTx.description}</h3>
-                <div style={{ display: 'flex', gap: '1rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                  <span>{receiptModalTx.execution_date.split('T')[0]}</span>
-                  <span style={{ backgroundColor: 'rgba(255,255,255,0.1)', padding: '0.1rem 0.5rem', borderRadius: '1rem' }}>
-                    {receiptModalTx.category || 'Без категории'}
-                  </span>
-                  <span style={{ color: receiptModalTx.amount < 0 ? 'var(--text-main)' : 'var(--success)', fontWeight: 600 }}>
-                    €{Math.abs(receiptModalTx.amount).toFixed(2)}
-                  </span>
+            <div style={{ padding: '1.25rem 1.25rem 0', flexShrink: 0 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
+                <div style={{ flex: 1, paddingRight: '1rem' }}>
+                  <h3 style={{ margin: '0 0 0.4rem 0', fontSize: '1.05rem', lineHeight: 1.3 }}>{receiptModalTx.description}</h3>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                    <span>{receiptModalTx.execution_date.split('T')[0]}</span>
+                    <span style={{ backgroundColor: 'rgba(255,255,255,0.1)', padding: '0.1rem 0.5rem', borderRadius: '1rem' }}>
+                      {receiptModalTx.category || 'Без категории'}
+                    </span>
+                    <span style={{ color: receiptModalTx.amount < 0 ? 'var(--danger)' : 'var(--success)', fontWeight: 700 }}>
+                      €{Math.abs(receiptModalTx.amount).toFixed(2)}
+                    </span>
+                    {receiptModalTx.splits && receiptModalTx.splits.length > 0 && (
+                      <span style={{ backgroundColor: 'rgba(99,102,241,0.2)', color: 'var(--primary)', padding: '0.1rem 0.5rem', borderRadius: '1rem' }}>
+                        {receiptModalTx.splits.length} частей
+                      </span>
+                    )}
+                  </div>
                 </div>
-              </div>
-              <button onClick={() => setReceiptModalTx(null)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '0.25rem', flexShrink: 0 }}>
-                <X size={20} />
-              </button>
-            </div>
-
-            {/* Divider */}
-            <div style={{ borderTop: '1px solid var(--border-color)', marginBottom: '1.25rem' }} />
-
-            {/* Receipt area */}
-            <div style={{ marginBottom: '1.25rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
-                <Paperclip size={16} color="var(--primary)" />
-                <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>Чек</span>
+                <button onClick={() => setReceiptModalTx(null)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '0.25rem', flexShrink: 0 }}>
+                  <X size={20} />
+                </button>
               </div>
 
-              {receiptModalTx.receipt_path ? (
-                <div style={{ position: 'relative' }}>
-                  {/* Image preview */}
-                  {/\.(jpe?g|png|gif|webp|bmp)$/i.test(receiptModalTx.receipt_path) ? (
-                    <a href={getReceiptUrl(receiptModalTx.receipt_path)} target="_blank" rel="noreferrer">
-                      <img
-                        src={getReceiptUrl(receiptModalTx.receipt_path)}
-                        alt="Чек"
-                        style={{
-                          width: '100%', maxHeight: '380px', objectFit: 'contain',
-                          borderRadius: '0.5rem', border: '1px solid var(--border-color)',
-                          backgroundColor: 'rgba(0,0,0,0.2)', cursor: 'zoom-in'
-                        }}
-                      />
-                    </a>
-                  ) : (
-                    /* PDF */
-                    <a
-                      href={getReceiptUrl(receiptModalTx.receipt_path)}
-                      target="_blank" rel="noreferrer"
-                      style={{
-                        display: 'flex', alignItems: 'center', gap: '0.75rem',
-                        padding: '1rem', borderRadius: '0.5rem',
-                        border: '1px solid var(--border-color)',
-                        backgroundColor: 'rgba(239,68,68,0.08)',
-                        color: 'var(--text-main)', textDecoration: 'none'
-                      }}
-                    >
-                      <FileText size={32} color="#ef4444" />
-                      <span style={{ fontSize: '0.875rem' }}>Открыть PDF чек</span>
-                    </a>
-                  )}
-
-                  {/* Delete button */}
-                  <button
-                    onClick={handleReceiptDelete}
-                    disabled={deletingReceipt}
-                    title="Удалить чек"
-                    style={{
-                      position: 'absolute', top: '8px', right: '8px',
-                      background: 'rgba(0,0,0,0.6)', border: 'none',
-                      borderRadius: '50%', width: '32px', height: '32px',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      cursor: deletingReceipt ? 'wait' : 'pointer', color: '#ef4444'
-                    }}
-                  >
-                    {deletingReceipt ? '…' : <Trash2 size={15} />}
+              {/* Tabs */}
+              <div style={{ display: 'flex', gap: '0', borderBottom: '1px solid var(--border-color)' }}>
+                {[
+                  { key: 'receipt', label: 'Чек', icon: <Paperclip size={14} /> },
+                  { key: 'splits', label: 'Разбивка', icon: <SplitSquareHorizontal size={14} /> },
+                ].map(tab => (
+                  <button key={tab.key} onClick={() => setModalTab(tab.key)} style={{
+                    display: 'flex', alignItems: 'center', gap: '0.4rem',
+                    padding: '0.6rem 1rem', background: 'none', border: 'none',
+                    borderBottom: modalTab === tab.key ? '2px solid var(--primary)' : '2px solid transparent',
+                    color: modalTab === tab.key ? 'var(--primary)' : 'var(--text-muted)',
+                    cursor: 'pointer', fontWeight: modalTab === tab.key ? 600 : 400,
+                    fontSize: '0.85rem', marginBottom: '-1px', transition: 'all 0.15s'
+                  }}>
+                    {tab.icon}{tab.label}
                   </button>
-                </div>
-              ) : (
-                <div style={{
-                  border: '2px dashed var(--border-color)', borderRadius: '0.75rem',
-                  padding: '2rem', textAlign: 'center', color: 'var(--text-muted)'
-                }}>
-                  <Paperclip size={28} style={{ marginBottom: '0.5rem', opacity: 0.4 }} />
-                  <p style={{ margin: '0 0 0.25rem 0', fontSize: '0.875rem' }}>Чек не прикреплён</p>
-                  <p style={{ margin: 0, fontSize: '0.75rem', opacity: 0.6 }}>Загрузите фото или PDF чека</p>
-                </div>
-              )}
+                ))}
+              </div>
             </div>
 
-            {/* Upload button */}
-            <label style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
-              padding: '0.75rem', borderRadius: '0.5rem',
-              background: uploadingReceipt ? 'rgba(99,102,241,0.3)' : 'var(--primary)',
-              color: 'white', cursor: uploadingReceipt ? 'wait' : 'pointer',
-              fontWeight: 500, fontSize: '0.875rem', transition: 'opacity 0.2s'
-            }}>
-              <Upload size={16} />
-              {uploadingReceipt ? 'Загрузка...' : receiptModalTx.receipt_path ? 'Заменить чек' : 'Прикрепить чек'}
-              <input
-                type="file"
-                accept="image/*,application/pdf"
-                style={{ display: 'none' }}
-                onChange={handleReceiptUpload}
-                disabled={uploadingReceipt}
-              />
-            </label>
+            {/* Tab content — scrollable */}
+            <div style={{ flex: 1, overflowY: 'auto', padding: '1.25rem' }}>
+
+              {/* ── Receipt tab ── */}
+              {modalTab === 'receipt' && (
+                <>
+                  {receiptModalTx.receipt_path ? (
+                    <div style={{ position: 'relative', marginBottom: '1rem' }}>
+                      {/\.(jpe?g|png|gif|webp|bmp)$/i.test(receiptModalTx.receipt_path) ? (
+                        <a href={getReceiptUrl(receiptModalTx.receipt_path)} target="_blank" rel="noreferrer">
+                          <img src={getReceiptUrl(receiptModalTx.receipt_path)} alt="Чек"
+                            style={{ width: '100%', maxHeight: '400px', objectFit: 'contain',
+                              borderRadius: '0.5rem', border: '1px solid var(--border-color)',
+                              backgroundColor: 'rgba(0,0,0,0.2)', cursor: 'zoom-in' }}
+                          />
+                        </a>
+                      ) : (
+                        <a href={getReceiptUrl(receiptModalTx.receipt_path)} target="_blank" rel="noreferrer"
+                          style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '1rem',
+                            borderRadius: '0.5rem', border: '1px solid var(--border-color)',
+                            backgroundColor: 'rgba(239,68,68,0.08)', color: 'var(--text-main)', textDecoration: 'none' }}>
+                          <FileText size={32} color="#ef4444" />
+                          <span style={{ fontSize: '0.875rem' }}>Открыть PDF чек</span>
+                        </a>
+                      )}
+                      <button onClick={handleReceiptDelete} disabled={deletingReceipt} title="Удалить чек"
+                        style={{ position: 'absolute', top: '8px', right: '8px', background: 'rgba(0,0,0,0.6)',
+                          border: 'none', borderRadius: '50%', width: '32px', height: '32px',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          cursor: deletingReceipt ? 'wait' : 'pointer', color: '#ef4444' }}>
+                        {deletingReceipt ? '…' : <Trash2 size={15} />}
+                      </button>
+                    </div>
+                  ) : (
+                    <div style={{ border: '2px dashed var(--border-color)', borderRadius: '0.75rem',
+                      padding: '2rem', textAlign: 'center', color: 'var(--text-muted)', marginBottom: '1rem' }}>
+                      <Paperclip size={28} style={{ marginBottom: '0.5rem', opacity: 0.4 }} />
+                      <p style={{ margin: '0 0 0.25rem 0', fontSize: '0.875rem' }}>Чек не прикреплён</p>
+                      <p style={{ margin: 0, fontSize: '0.75rem', opacity: 0.6 }}>Загрузите фото или PDF чека</p>
+                    </div>
+                  )}
+                  <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
+                    padding: '0.75rem', borderRadius: '0.5rem',
+                    background: uploadingReceipt ? 'rgba(99,102,241,0.3)' : 'var(--primary)',
+                    color: 'white', cursor: uploadingReceipt ? 'wait' : 'pointer',
+                    fontWeight: 500, fontSize: '0.875rem' }}>
+                    <Upload size={16} />
+                    {uploadingReceipt ? 'Загрузка...' : receiptModalTx.receipt_path ? 'Заменить чек' : 'Прикрепить чек'}
+                    <input type="file" accept="image/*,application/pdf" style={{ display: 'none' }}
+                      onChange={handleReceiptUpload} disabled={uploadingReceipt} />
+                  </label>
+                </>
+              )}
+
+              {/* ── Splits tab ── */}
+              {modalTab === 'splits' && (() => {
+                const txAbs = Math.abs(receiptModalTx.amount);
+                const splitTotal = splitRows.reduce((s, r) => s + (parseFloat(r.amount) || 0), 0);
+                const remainder = +(txAbs - splitTotal).toFixed(2);
+                const isValid = Math.abs(remainder) < 0.015;
+                return (
+                  <>
+                    <p style={{ margin: '0 0 1rem 0', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                      Распределите сумму €{txAbs.toFixed(2)} по нескольким категориям.
+                      Разбивка не изменяет основную категорию транзакции.
+                    </p>
+
+                    {/* Rows */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                      {splitRows.map((row, idx) => (
+                        <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr 90px auto', gap: '0.4rem', alignItems: 'center' }}>
+                          <select
+                            value={row.category_id || ''}
+                            onChange={e => {
+                              const cid = e.target.value ? parseInt(e.target.value) : null;
+                              const cname = cid ? (categories.find(c => c.id === cid)?.name || null) : null;
+                              updateSplitRow(idx, 'category_id', cid);
+                              updateSplitRow(idx, 'category', cname);
+                            }}
+                            style={{ backgroundColor: 'rgba(255,255,255,0.05)', color: 'var(--text-main)',
+                              border: '1px solid var(--border-color)', padding: '0.4rem 0.5rem',
+                              borderRadius: '0.4rem', fontSize: '0.85rem', outline: 'none', cursor: 'pointer' }}
+                          >
+                            <option value="">— категория —</option>
+                            {categories.map(c => (
+                              <option key={c.id} value={c.id}>{c.name}</option>
+                            ))}
+                          </select>
+                          <input
+                            type="number" min="0" step="0.01"
+                            placeholder="0.00"
+                            value={row.amount}
+                            onChange={e => updateSplitRow(idx, 'amount', e.target.value)}
+                            style={{ backgroundColor: 'rgba(255,255,255,0.05)', color: 'var(--text-main)',
+                              border: '1px solid var(--border-color)', padding: '0.4rem 0.5rem',
+                              borderRadius: '0.4rem', fontSize: '0.85rem', outline: 'none',
+                              textAlign: 'right', width: '100%' }}
+                          />
+                          <button onClick={() => removeSplitRow(idx)}
+                            style={{ background: 'none', border: 'none', color: 'var(--text-muted)',
+                              cursor: 'pointer', padding: '0.25rem', display: 'flex', alignItems: 'center' }}>
+                            <Trash2 size={15} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Add row */}
+                    <button onClick={addSplitRow}
+                      style={{ display: 'flex', alignItems: 'center', gap: '0.4rem',
+                        background: 'none', border: '1px dashed var(--border-color)',
+                        color: 'var(--text-muted)', borderRadius: '0.4rem', padding: '0.4rem 0.75rem',
+                        cursor: 'pointer', fontSize: '0.8rem', marginBottom: '1rem', width: '100%',
+                        justifyContent: 'center' }}>
+                      <Plus size={14} /> Добавить строку
+                    </button>
+
+                    {/* Totals */}
+                    <div style={{ backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: '0.5rem',
+                      padding: '0.75rem', marginBottom: '1rem', fontSize: '0.85rem' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.3rem' }}>
+                        <span style={{ color: 'var(--text-muted)' }}>Сумма транзакции:</span>
+                        <span style={{ fontWeight: 600 }}>€{txAbs.toFixed(2)}</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.3rem' }}>
+                        <span style={{ color: 'var(--text-muted)' }}>Распределено:</span>
+                        <span style={{ fontWeight: 600 }}>€{splitTotal.toFixed(2)}</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between',
+                        borderTop: '1px solid var(--border-color)', paddingTop: '0.3rem' }}>
+                        <span style={{ color: remainder < -0.01 ? '#ef4444' : 'var(--text-muted)' }}>Остаток:</span>
+                        <span style={{ fontWeight: 700,
+                          color: isValid ? 'var(--success)' : (remainder < 0 ? '#ef4444' : 'var(--text-main)') }}>
+                          €{remainder.toFixed(2)}
+                          {isValid && ' ✓'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {remainder < -0.01 && (
+                      <p style={{ color: '#ef4444', fontSize: '0.8rem', margin: '0 0 0.75rem 0' }}>
+                        ⚠ Сумма разбивки превышает сумму транзакции
+                      </p>
+                    )}
+
+                    {/* Action buttons */}
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                      <button onClick={handleSaveSplits} disabled={savingSplits || remainder < -0.01}
+                        style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem',
+                          padding: '0.7rem', borderRadius: '0.5rem',
+                          background: (savingSplits || remainder < -0.01) ? 'rgba(99,102,241,0.3)' : 'var(--primary)',
+                          color: 'white', border: 'none', cursor: (savingSplits || remainder < -0.01) ? 'not-allowed' : 'pointer',
+                          fontWeight: 600, fontSize: '0.875rem' }}>
+                        <Save size={15} />
+                        {savingSplits ? 'Сохранение...' : 'Сохранить разбивку'}
+                      </button>
+                      {splitRows.length > 0 && (
+                        <button onClick={handleDeleteSplits}
+                          style={{ padding: '0.7rem 1rem', borderRadius: '0.5rem',
+                            background: 'rgba(239,68,68,0.15)', color: '#ef4444',
+                            border: '1px solid rgba(239,68,68,0.3)', cursor: 'pointer', fontSize: '0.875rem' }}>
+                          <Trash2 size={15} />
+                        </button>
+                      )}
+                    </div>
+                  </>
+                );
+              })()}
+
+            </div>
           </div>
         </div>
       )}
