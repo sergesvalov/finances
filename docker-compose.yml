@@ -20,11 +20,13 @@ services:
       - "7051:7051"
     environment:
       - DATABASE_URL=postgresql://finances_user:finances_password@db:5432/finances_db
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
     depends_on:
       - db
     volumes:
       - ./backend:/app
       - receipts_data:/app/receipts
+
 
   frontend:
     build: ./frontend

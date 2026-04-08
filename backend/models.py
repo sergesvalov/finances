@@ -2,6 +2,17 @@ from sqlalchemy import Column, Integer, String, Numeric, DateTime, ForeignKey, T
 from sqlalchemy.orm import relationship
 from database import Base
 
+
+class ReceiptUpload(Base):
+    __tablename__ = "receipt_uploads"
+
+    id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(String, index=True, nullable=False)
+    filename = Column(String, nullable=False)
+    uploaded_at = Column(DateTime, index=True, nullable=False)
+    telegram_chat_id = Column(String, nullable=True)
+    original_filename = Column(String, nullable=True)
+
 transaction_tags = Table(
     'transaction_tags',
     Base.metadata,
