@@ -321,6 +321,100 @@ def send_telegram_report(req: ReportRequest, db: Session = Depends(get_db)):
         
     return {"message": f"Report successfully sent to {success_count} recipients."}
 
+@router.get("/expense-report")
+def get_expense_report(
+    month: Optional[str] = Query(None),
+    category_ids: Optional[str] = Query(None),  # comma-separated list of category ids
+    db: Session = Depends(get_db),
+):
+    """Generate expense report filtered by month and/or specific categories."""
+    start_date, end_date = None, None
+    if month:
+        try:
+            year, m = map(int, month.split('-'))
+            last_day = calendar.monthrange(year, m)[1]
+            start_date = datetime(year, m, 1)
+            end_date = datetime(year, m, last_day, 23, 59, 59)
+        except ValueError:
+            pass
+
+    # Parse requested category ids
+    cat_id_filter: Optional[list] = None
+    if category_ids:
+        try:
+            cat_id_filter = [int(x) for x in category_ids.split(',') if x.strip()]
+        except ValueError:
+            pass
+
+    # Category spending (categorised transactions)
+    from models import TransactionSplit
+    cat_query = (
+        db.query(
+            Category.id.label("cat_id"),
+            Category.name,
+            CategoryGroup.name.label("group_name"),
+            func.sum(Transaction.amount).label("total_amount"),
+        )
+        .join(Transaction)
+        .outerjoin(CategoryGroup, Category.group_id == CategoryGroup.id)
+        .filter(Transaction.amount < 0)
+    )
+
+    if start_date and end_date:
+        cat_query = cat_query.filter(
+            Transaction.execution_date >= start_date,
+            Transaction.execution_date <= end_date,
+        )
+
+    if cat_id_filter:
+        cat_query = cat_query.filter(Category.id.in_(cat_id_filter))
+
+    cat_rows = cat_query.group_by(Category.id, Category.name, CategoryGroup.name).all()
+
+    raw_categories = []
+    for cat_id, cat_name, group_name, total in cat_rows:
+        raw_categories.append(
+            {"name": cat_name, "group": group_name or "Прочие расходы", "value": abs(float(total))}
+        )
+
+    # Uncategorized — only include when no category filter is applied
+    if not cat_id_filter:
+        uncat_query = db.query(func.sum(Transaction.amount).label("total")).filter(
+            Transaction.amount < 0, Transaction.category_id == None
+        )
+        if start_date and end_date:
+            uncat_query = uncat_query.filter(
+                Transaction.execution_date >= start_date,
+                Transaction.execution_date <= end_date,
+            )
+        uncat_total = uncat_query.scalar()
+        if uncat_total:
+            raw_categories.append(
+                {"name": "Без категории", "group": "Без категории", "value": abs(float(uncat_total))}
+            )
+
+    # Group by category-group
+    grouped: dict = {}
+    for item in raw_categories:
+        g = item["group"]
+        if g not in grouped:
+            grouped[g] = {"name": g, "value": 0.0, "subcategories": []}
+        grouped[g]["value"] += item["value"]
+        grouped[g]["subcategories"].append({"name": item["name"], "value": item["value"]})
+
+    category_spending = sorted(grouped.values(), key=lambda x: x["value"], reverse=True)
+    for group in category_spending:
+        group["subcategories"] = sorted(group["subcategories"], key=lambda x: x["value"], reverse=True)
+
+    total_expenses = sum(g["value"] for g in category_spending)
+
+    return {
+        "category_spending": category_spending,
+        "total_expenses": total_expenses,
+        "month": month,
+    }
+
+
 @router.get("/payees")
 def get_top_payees(month: Optional[str] = Query(None), limit: int = 10, db: Session = Depends(get_db)):
     start_date, end_date = None, None
