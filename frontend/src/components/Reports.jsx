@@ -121,18 +121,38 @@ export default function Reports() {
   /* ── category selection helpers ── */
   const toggleCat = (id) => {
     setSelectedCatIds((prev) => {
+      // If we're in "all selected" mode (empty set), expand to all IDs first,
+      // then remove the clicked one — visually it looks like we unchecked it.
+      if (prev.size === 0) {
+        const next = new Set(allCategories.map((c) => c.id));
+        next.delete(id);
+        return next;
+      }
       const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      // If every category is now selected, revert to "all" shortcut (empty set)
+      if (next.size === allCategories.length) return new Set();
       return next;
     });
   };
 
   const toggleGroup = (groupId) => {
     const groupCatIds = allCategories.filter((c) => c.group_id === groupId).map((c) => c.id);
-    const allSelected = groupCatIds.every((id) => selectedCatIds.has(id));
     setSelectedCatIds((prev) => {
+      if (prev.size === 0) {
+        // "all selected" → deselect this whole group
+        const next = new Set(allCategories.map((c) => c.id));
+        groupCatIds.forEach((id) => next.delete(id));
+        return next;
+      }
+      const allGroupSelected = groupCatIds.every((id) => prev.has(id));
       const next = new Set(prev);
-      groupCatIds.forEach((id) => (allSelected ? next.delete(id) : next.add(id)));
+      groupCatIds.forEach((id) => (allGroupSelected ? next.delete(id) : next.add(id)));
+      if (next.size === allCategories.length) return new Set();
       return next;
     });
   };
@@ -261,7 +281,13 @@ export default function Reports() {
                     <div key={g.id} className="rpt-cat-group">
                       <div className="rpt-cat-group-header" onClick={() => toggleGroup(g.id)}>
                         <span className="rpt-check">
-                          {allSel || selectedCatIds.size === 0 ? <CheckSquare size={14} strokeWidth={2} /> : someSel ? <CheckSquare size={14} strokeWidth={2} style={{ opacity: 0.5 }} /> : <Square size={14} strokeWidth={2} />}
+                          {selectedCatIds.size === 0
+                            ? <CheckSquare size={14} strokeWidth={2} />
+                            : g.cats.every((c) => selectedCatIds.has(c.id))
+                              ? <CheckSquare size={14} strokeWidth={2} />
+                              : g.cats.some((c) => selectedCatIds.has(c.id))
+                                ? <CheckSquare size={14} strokeWidth={2} style={{ opacity: 0.5 }} />
+                                : <Square size={14} strokeWidth={2} />}
                         </span>
                         <span>{g.name}</span>
                       </div>
