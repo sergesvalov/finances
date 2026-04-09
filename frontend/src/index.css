@@ -26,6 +26,17 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Native <select> / <option> — force dark background globally */
+select {
+  background-color: #1e293b;
+  color: var(--text-main);
+  color-scheme: dark;
+}
+option {
+  background-color: #1e293b;
+  color: var(--text-main);
+}
+
 /* App Container */
 .app-container {
   display: flex;
@@ -847,7 +858,7 @@ th {
 
 .cat-select {
   padding: 0.55rem 0.6rem;
-  background: rgba(255,255,255,0.05);
+  background: #1e293b;
   border: 1px solid var(--border-color);
   border-radius: 0.5rem;
   color: var(--text-main);
@@ -1005,13 +1016,14 @@ th {
 
 .cat-group-select {
   max-width: 130px;
-  background: transparent;
-  border-color: transparent;
+  background: #0f172a;
+  border: 1px solid transparent;
   color: var(--text-muted);
   font-size: 0.78rem;
+  border-radius: 0.375rem;
 }
 .cat-group-select:hover, .cat-group-select:focus {
   border-color: var(--border-color);
-  background: rgba(255,255,255,0.05);
+  background: #1e293b;
   color: var(--text-main);
 }
