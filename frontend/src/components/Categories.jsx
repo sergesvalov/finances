@@ -1,53 +1,78 @@
-import React, { useState, useEffect } from 'react';
-import { Edit2, Save, Trash2, X, Plus, Tags, Folder } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Edit2, Save, Trash2, X, Plus, Tags, Folder, ChevronDown, ChevronRight, Check } from 'lucide-react';
 import api from '../api';
 
+/* ─── small inline-edit input ───────────────────────────────── */
+function InlineInput({ value, onSave, onCancel }) {
+  const [val, setVal] = useState(value);
+  const ref = useRef(null);
+  useEffect(() => { ref.current?.focus(); ref.current?.select(); }, []);
+  const submit = () => { if (val.trim() && val.trim() !== value) onSave(val.trim()); else onCancel(); };
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flex: 1 }}>
+      <input
+        ref={ref}
+        value={val}
+        onChange={e => setVal(e.target.value)}
+        onKeyDown={e => { if (e.key === 'Enter') submit(); if (e.key === 'Escape') onCancel(); }}
+        className="cat-inline-input"
+      />
+      <button onClick={submit} className="btn-icon cat-action-btn cat-action-save" title="Сохранить">
+        <Check size={14} />
+      </button>
+      <button onClick={onCancel} className="btn-icon cat-action-btn cat-action-cancel" title="Отмена">
+        <X size={14} />
+      </button>
+    </div>
+  );
+}
+
+/* ─── group pill badge ───────────────────────────────────────── */
+function GroupBadge({ groupName }) {
+  if (!groupName) return <span className="cat-badge cat-badge-none">Без группы</span>;
+  return <span className="cat-badge">{groupName}</span>;
+}
+
+/* ─── main component ─────────────────────────────────────────── */
 const Categories = () => {
   const [categories, setCategories] = useState([]);
   const [groups, setGroups] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  
-  const [editingId, setEditingId] = useState(null);
-  const [editName, setEditName] = useState('');
-  const [editGroupId, setEditGroupId] = useState('');
-  
+
+  // group editing
+  const [editingGroupId, setEditingGroupId] = useState(null);
+  const [newGroupName, setNewGroupName] = useState('');
+  const [addingGroup, setAddingGroup] = useState(false);
+
+  // category editing
+  const [editingCatId, setEditingCatId] = useState(null);
+  const [editCatName, setEditCatName] = useState('');
+  const [editCatGroupId, setEditCatGroupId] = useState('');
   const [newCatName, setNewCatName] = useState('');
   const [newCatGroupId, setNewCatGroupId] = useState('');
   const [addingCat, setAddingCat] = useState(false);
 
-  const [newGroupName, setNewGroupName] = useState('');
-  const [addingGroup, setAddingGroup] = useState(false);
+  // expanded groups in the grouped view
+  const [expandedGroups, setExpandedGroups] = useState(new Set());
 
+  /* ── fetch ── */
   const fetchData = async () => {
     setLoading(true);
     try {
-      console.log("Fetching categories and groups...");
-      const [catRes, grpRes] = await Promise.all([
-        api.get('/categories'),
-        api.get('/categories/groups')
-      ]);
-      console.log("Categories response count:", catRes.data?.length);
-      console.log("Groups response count:", grpRes.data?.length);
+      const [catRes, grpRes] = await Promise.all([api.get('/categories'), api.get('/categories/groups')]);
       setCategories(catRes.data);
       setGroups(grpRes.data);
+      setExpandedGroups(new Set(grpRes.data.map(g => g.id)));
     } catch (err) {
-      console.error("fetchData error:", err);
-      if (err.response) {
-        console.error("Error data:", err.response.data);
-        console.error("Error status:", err.response.status);
-      }
-      setError(`Failed to fetch data: ${err.message || 'Unknown error'}`);
+      setError(`Ошибка загрузки: ${err.message}`);
     } finally {
       setLoading(false);
     }
   };
+  useEffect(() => { fetchData(); }, []);
 
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  // --- Groups Handlers ---
+  /* ─── Group handlers ─── */
   const handleCreateGroup = async (e) => {
     e.preventDefault();
     if (!newGroupName.trim()) return;
@@ -56,32 +81,41 @@ const Categories = () => {
     try {
       const res = await api.post('/categories/groups', { name: newGroupName.trim() });
       if (!groups.find(g => g.id === res.data.id)) {
-        setGroups([...groups, res.data].sort((a,b) => a.name.localeCompare(b.name)));
+        const updated = [...groups, res.data].sort((a, b) => a.name.localeCompare(b.name));
+        setGroups(updated);
+        setExpandedGroups(prev => new Set([...prev, res.data.id]));
       }
       setNewGroupName('');
     } catch (err) {
-      console.error(err);
-      setError(err.response?.data?.detail || 'Failed to create group.');
+      setError(err.response?.data?.detail || 'Не удалось создать группу.');
     } finally {
       setAddingGroup(false);
     }
   };
 
-  const handleDeleteGroup = async (id, name) => {
-     if (!window.confirm(`Are you sure you want to delete group "${name}"? Categories in it will be ungrouped.`)) return;
-     try {
-       await api.delete(`/categories/groups/${id}`);
-       setGroups(groups.filter(g => g.id !== id));
-       // refresh categories to reflect unset group_ids
-       const catRes = await api.get('/categories');
-       setCategories(catRes.data);
-     } catch(err) {
-       console.error(err);
-       setError('Failed to delete group.');
-     }
+  const handleRenameGroup = async (id, name) => {
+    setError('');
+    try {
+      const res = await api.patch(`/categories/groups/${id}`, { name });
+      setGroups(prev => prev.map(g => g.id === id ? { ...g, name: res.data.name } : g).sort((a, b) => a.name.localeCompare(b.name)));
+      setEditingGroupId(null);
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Не удалось переименовать группу.');
+    }
   };
 
-  // --- Categories Handlers ---
+  const handleDeleteGroup = async (id, name) => {
+    if (!window.confirm(`Удалить группу «${name}»? Категории будут откреплены.`)) return;
+    try {
+      await api.delete(`/categories/groups/${id}`);
+      setGroups(prev => prev.filter(g => g.id !== id));
+      setCategories(prev => prev.map(c => c.group_id === id ? { ...c, group_id: null } : c));
+    } catch (err) {
+      setError('Не удалось удалить группу.');
+    }
+  };
+
+  /* ─── Category handlers ─── */
   const handleCreateCat = async (e) => {
     e.preventDefault();
     if (!newCatName.trim()) return;
@@ -90,203 +124,257 @@ const Categories = () => {
     try {
       const payload = { name: newCatName.trim() };
       if (newCatGroupId) payload.group_id = parseInt(newCatGroupId);
-      
       const res = await api.post('/categories', payload);
       if (!categories.find(c => c.id === res.data.id)) {
-        setCategories([...categories, res.data].sort((a,b) => a.name.localeCompare(b.name)));
+        setCategories(prev => [...prev, res.data].sort((a, b) => a.name.localeCompare(b.name)));
       }
       setNewCatName('');
       setNewCatGroupId('');
     } catch (err) {
-      console.error(err);
-      setError(err.response?.data?.detail || 'Failed to create category.');
+      setError(err.response?.data?.detail || 'Не удалось создать категорию.');
     } finally {
       setAddingCat(false);
     }
   };
 
-  const handleStartEditCat = (cat) => {
-    setEditingId(cat.id);
-    setEditName(cat.name);
-    setEditGroupId(cat.group_id || '');
-  };
-
   const handleSaveEditCat = async (id) => {
-    if (!editName.trim()) return;
+    if (!editCatName.trim()) return;
     setError('');
     try {
-      const payload = { name: editName.trim() };
-      payload.group_id = editGroupId ? parseInt(editGroupId) : -1; // -1 to unset in backend
-      
+      const payload = { name: editCatName.trim(), group_id: editCatGroupId ? parseInt(editCatGroupId) : -1 };
       const res = await api.patch(`/categories/${id}`, payload);
-      setCategories(categories.map(c => c.id === id ? { ...c, name: res.data.name, group_id: res.data.group_id } : c).sort((a,b) => a.name.localeCompare(b.name)));
-      setEditingId(null);
+      setCategories(prev =>
+        prev.map(c => c.id === id ? { ...c, name: res.data.name, group_id: res.data.group_id } : c)
+          .sort((a, b) => a.name.localeCompare(b.name))
+      );
+      setEditingCatId(null);
     } catch (err) {
-      console.error(err);
-      setError(err.response?.data?.detail || 'Failed to update category.');
+      setError(err.response?.data?.detail || 'Не удалось обновить категорию.');
     }
   };
 
-  const handleQuickGroupChange = async (catId, newGroupId) => {
+  const handleQuickGroupChange = async (catId, newGrpId) => {
     try {
-       const payload = { group_id: newGroupId ? parseInt(newGroupId) : -1 };
-       const res = await api.patch(`/categories/${catId}`, payload);
-       setCategories(categories.map(c => c.id === catId ? { ...c, group_id: res.data.group_id } : c));
-    } catch(err) {
-       console.error(err);
+      const payload = { group_id: newGrpId ? parseInt(newGrpId) : -1 };
+      const res = await api.patch(`/categories/${catId}`, payload);
+      setCategories(prev => prev.map(c => c.id === catId ? { ...c, group_id: res.data.group_id } : c));
+    } catch (err) {
+      setError('Не удалось изменить группу.');
     }
   };
 
   const handleDeleteCat = async (id, name) => {
-    if (!window.confirm(`Are you sure you want to delete the category "${name}"? All transactions linked to it will become Uncategorized.`)) return;
+    if (!window.confirm(`Удалить категорию «${name}»? Транзакции станут некатегоризированными.`)) return;
     setError('');
     try {
       await api.delete(`/categories/${id}`);
-      setCategories(categories.filter(c => c.id !== id));
+      setCategories(prev => prev.filter(c => c.id !== id));
     } catch (err) {
-      console.error(err);
-      setError('Failed to delete category.');
+      setError('Не удалось удалить категорию.');
     }
   };
 
-  if (loading) return <div style={{ padding: '2rem', textAlign: 'center' }}>Loading Categories...</div>;
+  const startEditCat = (cat) => {
+    setEditingCatId(cat.id);
+    setEditCatName(cat.name);
+    setEditCatGroupId(cat.group_id || '');
+  };
+
+  const toggleGroup = (id) => {
+    setExpandedGroups(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  /* ─── build grouped view ─── */
+  const groupMap = Object.fromEntries(groups.map(g => [g.id, g.name]));
+
+  const catsByGroup = groups.map(g => ({
+    ...g,
+    cats: categories.filter(c => c.group_id === g.id),
+  }));
+  const ungrouped = categories.filter(c => !c.group_id);
+
+  if (loading) return <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>Загрузка…</div>;
 
   return (
-    <div>
+    <div className="cat-page">
       <div className="page-header">
-        <h1 className="page-title">Categories & Groups Editor</h1>
-      </div>
-      
-      {error && (
-        <div style={{ marginBottom: '1.5rem', padding: '0.75rem', borderRadius: '0.5rem', backgroundColor: 'rgba(239,68,68,0.1)', color: 'var(--danger)', maxWidth: '800px' }}>
-          {error}
+        <div className="page-title-group">
+          <Tags size={28} className="page-icon" />
+          <div>
+            <h1 className="page-title">Categories &amp; Groups Editor</h1>
+            <p className="page-subtitle">Управление категориями и группами расходов</p>
+          </div>
         </div>
-      )}
+      </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: '2rem', alignItems: 'start' }}>
-        
-        {/* GROUPS COLUMN */}
-        <div className="card">
-          <h2 style={{marginTop: 0, marginBottom: '1rem', fontSize: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem'}}>
-            <Folder size={20} color="var(--primary)"/> Category Groups
-          </h2>
-          <p className="text-muted" style={{fontSize: '0.875rem', marginBottom: '1rem'}}>
-             Groups are used to organize spending on the dashboard.
-          </p>
+      {error && <div className="error-state" style={{ marginBottom: '1.5rem' }}>{error}</div>}
 
-          <form onSubmit={handleCreateGroup} style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem' }}>
-            <input 
-              type="text" 
-              placeholder="New group name..." 
+      <div className="cat-layout">
+        {/* ══ LEFT: Groups panel ══ */}
+        <div className="card cat-panel">
+          <div className="cat-panel-header">
+            <Folder size={18} color="var(--primary)" />
+            <span>Группы категорий</span>
+          </div>
+          <p className="cat-panel-hint">Группы объединяют категории в разделах аналитики.</p>
+
+          {/* add group form */}
+          <form onSubmit={handleCreateGroup} className="cat-add-form">
+            <input
+              className="cat-input"
+              placeholder="Новая группа…"
               value={newGroupName}
               onChange={e => setNewGroupName(e.target.value)}
-              style={{ flex: 1, padding: '0.6rem', backgroundColor: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-color)', borderRadius: '0.5rem', color: 'white', outline: 'none' }}
             />
-            <button type="submit" className="btn btn-primary" disabled={addingGroup || !newGroupName} style={{ padding: '0.6rem 1rem' }}>
-              Add
+            <button type="submit" className="btn btn-primary cat-add-btn" disabled={addingGroup || !newGroupName.trim()}>
+              <Plus size={15} />
             </button>
           </form>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-            {groups.length === 0 ? (
-              <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '1rem' }}>No groups.</div>
-            ) : (
-              groups.map(grp => (
-                <div key={grp.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.5rem', borderBottom: '1px solid var(--border-color)' }}>
-                  <span>{grp.name}</span>
-                  <button onClick={() => handleDeleteGroup(grp.id, grp.name)} style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer' }} title="Delete Group">
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-              ))
+          {/* groups list */}
+          <div className="cat-list">
+            {groups.length === 0 && (
+              <div className="cat-empty">Нет групп</div>
             )}
+            {groups.map(grp => (
+              <div key={grp.id} className="cat-group-item">
+                {editingGroupId === grp.id ? (
+                  <InlineInput
+                    value={grp.name}
+                    onSave={name => handleRenameGroup(grp.id, name)}
+                    onCancel={() => setEditingGroupId(null)}
+                  />
+                ) : (
+                  <>
+                    <div className="cat-group-name">
+                      <Folder size={14} color="var(--primary)" style={{ flexShrink: 0 }} />
+                      <span>{grp.name}</span>
+                      <span className="cat-group-count">{categories.filter(c => c.group_id === grp.id).length}</span>
+                    </div>
+                    <div className="cat-row-actions">
+                      <button
+                        className="btn-icon cat-action-btn"
+                        title="Переименовать"
+                        onClick={() => setEditingGroupId(grp.id)}
+                      >
+                        <Edit2 size={14} />
+                      </button>
+                      <button
+                        className="btn-icon cat-action-btn cat-action-delete"
+                        title="Удалить группу"
+                        onClick={() => handleDeleteGroup(grp.id, grp.name)}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            ))}
           </div>
         </div>
 
-        {/* CATEGORIES COLUMN */}
-        <div className="card">
-          <h2 style={{marginTop: 0, marginBottom: '1rem', fontSize: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem'}}>
-            <Tags size={20} color="var(--primary)"/> Categories
-          </h2>
-          
-          <form onSubmit={handleCreateCat} style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem' }}>
-            <input 
-              type="text" 
-              placeholder="New category..." 
+        {/* ══ RIGHT: Categories panel ══ */}
+        <div className="card cat-panel cat-panel-wide">
+          <div className="cat-panel-header">
+            <Tags size={18} color="var(--primary)" />
+            <span>Категории</span>
+            <span className="cat-count-badge">{categories.length}</span>
+          </div>
+
+          {/* add category form */}
+          <form onSubmit={handleCreateCat} className="cat-add-form cat-add-form-wide">
+            <input
+              className="cat-input"
+              placeholder="Название новой категории…"
               value={newCatName}
               onChange={e => setNewCatName(e.target.value)}
-              style={{ flex: 1, padding: '0.6rem', backgroundColor: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-color)', borderRadius: '0.5rem', color: 'white', outline: 'none' }}
             />
-            <select 
+            <select
+              className="cat-select"
               value={newCatGroupId}
               onChange={e => setNewCatGroupId(e.target.value)}
-              style={{ padding: '0.6rem', backgroundColor: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-color)', borderRadius: '0.5rem', color: 'white', outline: 'none' }}
             >
-              <option value="">No Group</option>
+              <option value="">Без группы</option>
               {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
             </select>
-            <button type="submit" className="btn btn-primary" disabled={addingCat || !newCatName} style={{ padding: '0.6rem 1rem' }}>
-              Add
+            <button type="submit" className="btn btn-primary cat-add-btn" disabled={addingCat || !newCatName.trim()}>
+              <Plus size={15} /> Добавить
             </button>
           </form>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-            {categories.length === 0 ? (
-              <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '2rem' }}>No categories created yet.</div>
-            ) : (
-              categories.map(cat => (
-                <div key={cat.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.02)', padding: '0.75rem 1rem', borderRadius: '0.5rem', border: '1px solid var(--border-color)' }}>
-                  {editingId === cat.id ? (
-                    <div style={{ display: 'flex', flex: 1, alignItems: 'center', gap: '0.5rem' }}>
-                      <input 
-                        type="text" 
-                        value={editName}
-                        autoFocus
-                        onChange={(e) => setEditName(e.target.value)}
-                        onKeyDown={(e) => { if(e.key === 'Enter') handleSaveEditCat(cat.id); }}
-                        style={{ flex: 1, padding: '0.5rem', backgroundColor: 'rgba(255,255,255,0.1)', border: '1px solid var(--primary)', borderRadius: '0.25rem', color: 'white', outline: 'none' }}
-                      />
-                      <select 
-                        value={editGroupId}
-                        onChange={e => setEditGroupId(e.target.value)}
-                        style={{ padding: '0.5rem', backgroundColor: 'rgba(255,255,255,0.1)', border: '1px solid var(--border-color)', borderRadius: '0.25rem', color: 'white', outline: 'none', maxWidth: '120px' }}
-                      >
-                        <option value="">No Group</option>
-                        {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
-                      </select>
-                      <button onClick={() => handleSaveEditCat(cat.id)} style={{ background: 'none', border: 'none', color: 'var(--success)', cursor: 'pointer', padding: '0.25rem' }} title="Save">
-                        <Save size={18} />
-                      </button>
-                      <button onClick={() => setEditingId(null)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '0.25rem' }} title="Cancel">
-                        <X size={18} />
-                      </button>
-                    </div>
-                  ) : (
-                    <>
-                      <div style={{ fontWeight: '500', display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1 }}>
-                        <Tags size={16} color="var(--primary)" />
-                        {cat.name}
-                      </div>
-                      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                        <select 
-                          value={cat.group_id || ''}
-                          onChange={e => handleQuickGroupChange(cat.id, e.target.value)}
-                          style={{ padding: '0.25rem 0.5rem', fontSize: '0.8rem', backgroundColor: 'transparent', border: '1px solid var(--border-color)', borderRadius: '0.25rem', color: 'var(--text-muted)', outline: 'none', maxWidth: '100px' }}
-                        >
-                          <option value="">Ungrouped</option>
-                          {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
-                        </select>
-                        <button onClick={() => handleStartEditCat(cat)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '0.25rem' }} title="Rename">
-                          <Edit2 size={16} />
-                        </button>
-                        <button onClick={() => handleDeleteCat(cat.id, cat.name)} style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', padding: '0.25rem' }} title="Delete">
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    </>
-                  )}
+          {/* grouped categories view */}
+          <div className="cat-list">
+            {/* categories by group */}
+            {catsByGroup.map(grp => (
+              <div key={grp.id} className="cat-group-section">
+                <div className="cat-group-section-header" onClick={() => toggleGroup(grp.id)}>
+                  <span className="cat-group-section-chevron">
+                    {expandedGroups.has(grp.id) ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                  </span>
+                  <Folder size={14} color="var(--primary)" />
+                  <span className="cat-group-section-name">{grp.name}</span>
+                  <span className="cat-group-count">{grp.cats.length}</span>
                 </div>
-              ))
+
+                {expandedGroups.has(grp.id) && grp.cats.map(cat => (
+                  <CatRow
+                    key={cat.id}
+                    cat={cat}
+                    groups={groups}
+                    groupMap={groupMap}
+                    isEditing={editingCatId === cat.id}
+                    editCatName={editCatName}
+                    editCatGroupId={editCatGroupId}
+                    setEditCatName={setEditCatName}
+                    setEditCatGroupId={setEditCatGroupId}
+                    onEdit={() => startEditCat(cat)}
+                    onSave={() => handleSaveEditCat(cat.id)}
+                    onCancel={() => setEditingCatId(null)}
+                    onDelete={() => handleDeleteCat(cat.id, cat.name)}
+                    onGroupChange={gid => handleQuickGroupChange(cat.id, gid)}
+                  />
+                ))}
+              </div>
+            ))}
+
+            {/* Ungrouped */}
+            {ungrouped.length > 0 && (
+              <div className="cat-group-section">
+                <div className="cat-group-section-header" onClick={() => toggleGroup('none')}>
+                  <span className="cat-group-section-chevron">
+                    {expandedGroups.has('none') ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                  </span>
+                  <span className="cat-group-section-name" style={{ color: 'var(--text-muted)' }}>Без группы</span>
+                  <span className="cat-group-count">{ungrouped.length}</span>
+                </div>
+                {expandedGroups.has('none') && ungrouped.map(cat => (
+                  <CatRow
+                    key={cat.id}
+                    cat={cat}
+                    groups={groups}
+                    groupMap={groupMap}
+                    isEditing={editingCatId === cat.id}
+                    editCatName={editCatName}
+                    editCatGroupId={editCatGroupId}
+                    setEditCatName={setEditCatName}
+                    setEditCatGroupId={setEditCatGroupId}
+                    onEdit={() => startEditCat(cat)}
+                    onSave={() => handleSaveEditCat(cat.id)}
+                    onCancel={() => setEditingCatId(null)}
+                    onDelete={() => handleDeleteCat(cat.id, cat.name)}
+                    onGroupChange={gid => handleQuickGroupChange(cat.id, gid)}
+                  />
+                ))}
+              </div>
+            )}
+
+            {categories.length === 0 && (
+              <div className="cat-empty">Категорий пока нет</div>
             )}
           </div>
         </div>
@@ -294,5 +382,66 @@ const Categories = () => {
     </div>
   );
 };
+
+/* ─── category row component ─────────────────────────────────── */
+function CatRow({ cat, groups, groupMap, isEditing, editCatName, editCatGroupId,
+  setEditCatName, setEditCatGroupId, onEdit, onSave, onCancel, onDelete, onGroupChange }) {
+
+  return (
+    <div className={`cat-row${isEditing ? ' cat-row-editing' : ''}`}>
+      {isEditing ? (
+        <>
+          <input
+            className="cat-inline-input"
+            value={editCatName}
+            autoFocus
+            onChange={e => setEditCatName(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') onSave(); if (e.key === 'Escape') onCancel(); }}
+          />
+          <select
+            className="cat-select cat-select-sm"
+            value={editCatGroupId}
+            onChange={e => setEditCatGroupId(e.target.value)}
+          >
+            <option value="">Без группы</option>
+            {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+          </select>
+          <div className="cat-row-actions">
+            <button className="btn-icon cat-action-btn cat-action-save" title="Сохранить" onClick={onSave}>
+              <Save size={14} />
+            </button>
+            <button className="btn-icon cat-action-btn cat-action-cancel" title="Отмена" onClick={onCancel}>
+              <X size={14} />
+            </button>
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="cat-row-name">
+            <Tags size={13} color="var(--primary)" style={{ flexShrink: 0 }} />
+            <span>{cat.name}</span>
+          </div>
+          <select
+            className="cat-select cat-select-sm cat-group-select"
+            value={cat.group_id || ''}
+            onChange={e => onGroupChange(e.target.value)}
+            title="Привязать к группе"
+          >
+            <option value="">Без группы</option>
+            {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+          </select>
+          <div className="cat-row-actions">
+            <button className="btn-icon cat-action-btn" title="Переименовать" onClick={onEdit}>
+              <Edit2 size={14} />
+            </button>
+            <button className="btn-icon cat-action-btn cat-action-delete" title="Удалить" onClick={onDelete}>
+              <Trash2 size={14} />
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 
 export default Categories;

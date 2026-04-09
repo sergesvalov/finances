@@ -34,6 +34,22 @@ def create_group(group: CategoryGroupCreate, db: Session = Depends(get_db)):
     db.refresh(new_group)
     return {"id": new_group.id, "name": new_group.name}
 
+class CategoryGroupUpdate(BaseModel):
+    name: str
+
+@router.patch("/groups/{group_id}")
+def update_group(group_id: int, body: CategoryGroupUpdate, db: Session = Depends(get_db)):
+    group = db.query(CategoryGroup).filter(CategoryGroup.id == group_id).first()
+    if not group:
+        raise HTTPException(status_code=404, detail="Group not found")
+    existing = db.query(CategoryGroup).filter(CategoryGroup.name == body.name, CategoryGroup.id != group_id).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Group with this name already exists")
+    group.name = body.name.strip()
+    db.commit()
+    db.refresh(group)
+    return {"id": group.id, "name": group.name}
+
 @router.delete("/groups/{group_id}")
 def delete_group(group_id: int, db: Session = Depends(get_db)):
     group = db.query(CategoryGroup).filter(CategoryGroup.id == group_id).first()
