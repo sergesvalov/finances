@@ -36,8 +36,8 @@ def get_analytics_summary(month: Optional[str] = Query(None), exclude_transfers:
     excluded_category_ids = []
     if exclude_transfers:
         excluded_cats = db.query(Category.id).outerjoin(CategoryGroup, Category.group_id == CategoryGroup.id).filter(
-            (Category.name.in_(["Переводы", "Пополнения"])) |
-            (CategoryGroup.name.in_(["Переводы", "Пополнения"]))
+            (Category.name.in_(["Переводы", "Перевод", "Пополнения", "Пополнение"])) |
+            (CategoryGroup.name.in_(["Переводы", "Перевод", "Пополнения", "Пополнение"]))
         ).all()
         excluded_category_ids = [c[0] for c in excluded_cats]
 
@@ -400,8 +400,8 @@ def get_expense_report(
     excluded_category_ids = []
     if exclude_transfers:
         excluded_cats = db.query(Category.id).outerjoin(CategoryGroup, Category.group_id == CategoryGroup.id).filter(
-            (Category.name.in_(["Переводы", "Пополнения"])) |
-            (CategoryGroup.name.in_(["Переводы", "Пополнения"]))
+            (Category.name.in_(["Переводы", "Перевод", "Пополнения", "Пополнение"])) |
+            (CategoryGroup.name.in_(["Переводы", "Перевод", "Пополнения", "Пополнение"]))
         ).all()
         excluded_category_ids = [c[0] for c in excluded_cats]
 
@@ -496,8 +496,8 @@ def get_top_payees(month: Optional[str] = Query(None), limit: int = 10, exclude_
     
     if exclude_transfers:
         excluded_cats = db.query(Category.id).outerjoin(CategoryGroup, Category.group_id == CategoryGroup.id).filter(
-            (Category.name.in_(["Переводы", "Пополнения"])) |
-            (CategoryGroup.name.in_(["Переводы", "Пополнения"]))
+            (Category.name.in_(["Переводы", "Перевод", "Пополнения", "Пополнение"])) |
+            (CategoryGroup.name.in_(["Переводы", "Перевод", "Пополнения", "Пополнение"]))
         ).all()
         excluded_category_ids = [c[0] for c in excluded_cats]
         if excluded_category_ids:
@@ -516,8 +516,8 @@ def get_subscriptions(exclude_transfers: bool = Query(False), db: Session = Depe
     
     if exclude_transfers:
         excluded_cats = db.query(Category.id).outerjoin(CategoryGroup, Category.group_id == CategoryGroup.id).filter(
-            (Category.name.in_(["Переводы", "Пополнения"])) |
-            (CategoryGroup.name.in_(["Переводы", "Пополнения"]))
+            (Category.name.in_(["Переводы", "Перевод", "Пополнения", "Пополнение"])) |
+            (CategoryGroup.name.in_(["Переводы", "Перевод", "Пополнения", "Пополнение"]))
         ).all()
         excluded_category_ids = [c[0] for c in excluded_cats]
         if excluded_category_ids:
