@@ -404,22 +404,24 @@ const Dashboard = () => {
            </div>
         </div>
         
-        <div className="card" style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
-           <div style={{ backgroundColor: 'rgba(16, 185, 129, 0.1)', padding: '1rem', borderRadius: '50%' }}>
-             <ArrowUpRight color="var(--success)" size={32} />
-           </div>
-           <div>
-             <p className="text-muted" style={{ fontSize: '0.875rem', fontWeight: '500', margin: '0 0 0.25rem 0' }}>Total Income</p>
-             <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.75rem' }}>
-               <h2 style={{ fontSize: '1.75rem', margin: 0 }}>€{(data.total_income || 0).toFixed(2)}</h2>
-               {incomeChange && (
-                 <span style={{ fontSize: '0.875rem', fontWeight: '500', color: incomeChange.isPositive ? 'var(--success)' : 'var(--danger)' }} title="vs previous month">
-                   {incomeChange.isPositive ? '↑' : '↓'} {incomeChange.text}
-                 </span>
-               )}
+        {!excludeTransfers && (
+          <div className="card" style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
+             <div style={{ backgroundColor: 'rgba(16, 185, 129, 0.1)', padding: '1rem', borderRadius: '50%' }}>
+               <ArrowUpRight color="var(--success)" size={32} />
              </div>
-           </div>
-        </div>
+             <div>
+               <p className="text-muted" style={{ fontSize: '0.875rem', fontWeight: '500', margin: '0 0 0.25rem 0' }}>Total Income</p>
+               <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.75rem' }}>
+                 <h2 style={{ fontSize: '1.75rem', margin: 0 }}>€{(data.total_income || 0).toFixed(2)}</h2>
+                 {incomeChange && (
+                   <span style={{ fontSize: '0.875rem', fontWeight: '500', color: incomeChange.isPositive ? 'var(--success)' : 'var(--danger)' }} title="vs previous month">
+                     {incomeChange.isPositive ? '↑' : '↓'} {incomeChange.text}
+                   </span>
+                 )}
+               </div>
+             </div>
+          </div>
+        )}
 
         <div className="card" style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
            <div style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', padding: '1rem', borderRadius: '50%' }}>
@@ -501,7 +503,9 @@ const Dashboard = () => {
                       itemStyle={{ color: 'var(--text-main)' }}
                     />
                     <Legend verticalAlign="top" height={36}/>
-                    <Line type="monotone" name="Income" dataKey="income" stroke="var(--success)" strokeWidth={3} dot={false} activeDot={{ r: 6 }} />
+                    {!excludeTransfers && (
+                      <Line type="monotone" name="Income" dataKey="income" stroke="var(--success)" strokeWidth={3} dot={false} activeDot={{ r: 6 }} />
+                    )}
                     <Line type="monotone" name="Expenses" dataKey="expense" stroke="var(--danger)" strokeWidth={3} dot={false} activeDot={{ r: 6 }} />
                   </LineChart>
                 </ResponsiveContainer>

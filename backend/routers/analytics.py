@@ -86,7 +86,12 @@ def get_analytics_summary(month: Optional[str] = Query(None), exclude_transfers:
         } for t in flow_list])
         flow_df['day'] = flow_df['date'].dt.strftime('%Y-%m-%d')
         flow_df['expense'] = flow_df['amount'].apply(lambda x: abs(x) if x < 0 else 0.0)
-        flow_df['income'] = flow_df['amount'].apply(lambda x: x if x > 0 else 0.0)
+        
+        if exclude_transfers:
+            flow_df['income'] = 0.0
+        else:
+            flow_df['income'] = flow_df['amount'].apply(lambda x: x if x > 0 else 0.0)
+            
         flow_grouped = flow_df.groupby('day')[['expense', 'income']].sum().reset_index()
         income_expenses_dynamics = [{"date": row['day'], "expense": row['expense'], "income": row['income']} for _, row in flow_grouped.iterrows()]
     
@@ -134,16 +139,19 @@ def get_analytics_summary(month: Optional[str] = Query(None), exclude_transfers:
         group["subcategories"] = sorted(group["subcategories"], key=lambda x: x["value"], reverse=True)
          
     # Total Income
-    income_query = db.query(func.sum(Transaction.amount).label("total")) \
-        .filter(Transaction.amount > 0)
-        
-    if excluded_category_ids:
-        income_query = income_query.filter(Transaction.category_id.notin_(excluded_category_ids) | (Transaction.category_id == None))
+    if exclude_transfers:
+        total_income = 0.0
+    else:
+        income_query = db.query(func.sum(Transaction.amount).label("total")) \
+            .filter(Transaction.amount > 0)
+            
+        if excluded_category_ids:
+            income_query = income_query.filter(Transaction.category_id.notin_(excluded_category_ids) | (Transaction.category_id == None))
 
-    if start_date and end_date:
-        income_query = income_query.filter(Transaction.execution_date >= start_date, Transaction.execution_date <= end_date)
-        
-    total_income = income_query.scalar() or 0.0
+        if start_date and end_date:
+            income_query = income_query.filter(Transaction.execution_date >= start_date, Transaction.execution_date <= end_date)
+            
+        total_income = income_query.scalar() or 0.0
          
     previous_total_expenses = 0.0
     previous_total_income = 0.0
@@ -159,8 +167,11 @@ def get_analytics_summary(month: Optional[str] = Query(None), exclude_transfers:
         prev_exp = prev_exp_q.scalar()
         previous_total_expenses = abs(float(prev_exp)) if prev_exp else 0.0
         
-        prev_inc = prev_inc_q.scalar()
-        previous_total_income = float(prev_inc) if prev_inc else 0.0
+        if exclude_transfers:
+            previous_total_income = 0.0
+        else:
+            prev_inc = prev_inc_q.scalar()
+            previous_total_income = float(prev_inc) if prev_inc else 0.0
         
     daily_expenses = []
     if start_date and end_date:
@@ -296,7 +307,8 @@ def send_telegram_report(req: ReportRequest, db: Session = Depends(get_db)):
          current_balance = data["balance_dynamics"][-1]["balance"]
     
     lines = [f"📊 <b>Monthly Finance Report ({month_str})</b>", ""]
-    lines.append(f"🟢 <b>Income:</b> +€{total_income:.2f}")
+    if not req.exclude_transfers:
+        lines.append(f"🟢 <b>Income:</b> +€{total_income:.2f}")
     lines.append(f"🔴 <b>Expenses:</b> -€{total_spent:.2f}")
     lines.append(f"💳 <b>Current Balance:</b> €{current_balance:.2f}")
     lines.append("")
