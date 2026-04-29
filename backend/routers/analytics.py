@@ -14,7 +14,7 @@ from pydantic import BaseModel
 router = APIRouter(prefix="/api/analytics", tags=["Analytics"])
 
 @router.get("/summary")
-def get_analytics_summary(month: Optional[str] = Query(None), db: Session = Depends(get_db)):
+def get_analytics_summary(month: Optional[str] = Query(None), exclude_transfers: bool = Query(False), db: Session = Depends(get_db)):
     # Calculate start and end dates if month is provided
     start_date, end_date = None, None
     prev_start_date, prev_end_date = None, None
@@ -33,8 +33,19 @@ def get_analytics_summary(month: Optional[str] = Query(None), db: Session = Depe
         except ValueError:
             pass
 
+    excluded_category_ids = []
+    if exclude_transfers:
+        excluded_cats = db.query(Category.id).outerjoin(CategoryGroup, Category.group_id == CategoryGroup.id).filter(
+            (Category.name.in_(["Переводы", "Пополнения"])) |
+            (CategoryGroup.name.in_(["Переводы", "Пополнения"]))
+        ).all()
+        excluded_category_ids = [c[0] for c in excluded_cats]
+
     # We need all transactions to get available_months and basic filtering
-    all_transactions = db.query(Transaction.execution_date).order_by(Transaction.execution_date.asc()).all()
+    all_transactions = db.query(Transaction.execution_date).order_by(Transaction.execution_date.asc())
+    if excluded_category_ids:
+        all_transactions = all_transactions.filter(Transaction.category_id.notin_(excluded_category_ids) | (Transaction.category_id == None))
+    all_transactions = all_transactions.all()
     
     if not all_transactions:
          return {"available_months": [], "category_spending": [], "balance_dynamics": []}
@@ -46,6 +57,8 @@ def get_analytics_summary(month: Optional[str] = Query(None), db: Session = Depe
     tx_query = db.query(Transaction.execution_date, Transaction.balance).order_by(Transaction.execution_date.asc())
     if start_date and end_date:
         tx_query = tx_query.filter(Transaction.execution_date >= start_date, Transaction.execution_date <= end_date)
+    # Balance doesn't need to exclude transfers, balance is an absolute account value
+
         
     tx_list = tx_query.all()
     balance_dynamics = []
@@ -62,6 +75,8 @@ def get_analytics_summary(month: Optional[str] = Query(None), db: Session = Depe
     flow_tx_query = db.query(Transaction.execution_date, Transaction.amount)
     if start_date and end_date:
         flow_tx_query = flow_tx_query.filter(Transaction.execution_date >= start_date, Transaction.execution_date <= end_date)
+    if excluded_category_ids:
+        flow_tx_query = flow_tx_query.filter(Transaction.category_id.notin_(excluded_category_ids) | (Transaction.category_id == None))
     flow_list = flow_tx_query.all()
     
     if flow_list:
@@ -83,6 +98,9 @@ def get_analytics_summary(month: Optional[str] = Query(None), db: Session = Depe
         .outerjoin(CategoryGroup, Category.group_id == CategoryGroup.id) \
         .filter(Transaction.amount < 0)
         
+    if excluded_category_ids:
+        cat_query = cat_query.filter(Category.id.notin_(excluded_category_ids))
+
     if start_date and end_date:
         cat_query = cat_query.filter(Transaction.execution_date >= start_date, Transaction.execution_date <= end_date)
         
@@ -119,6 +137,9 @@ def get_analytics_summary(month: Optional[str] = Query(None), db: Session = Depe
     income_query = db.query(func.sum(Transaction.amount).label("total")) \
         .filter(Transaction.amount > 0)
         
+    if excluded_category_ids:
+        income_query = income_query.filter(Transaction.category_id.notin_(excluded_category_ids) | (Transaction.category_id == None))
+
     if start_date and end_date:
         income_query = income_query.filter(Transaction.execution_date >= start_date, Transaction.execution_date <= end_date)
         
@@ -128,10 +149,17 @@ def get_analytics_summary(month: Optional[str] = Query(None), db: Session = Depe
     previous_total_income = 0.0
     
     if prev_start_date and prev_end_date:
-        prev_exp = db.query(func.sum(Transaction.amount)).filter(Transaction.amount < 0, Transaction.execution_date >= prev_start_date, Transaction.execution_date <= prev_end_date).scalar()
+        prev_exp_q = db.query(func.sum(Transaction.amount)).filter(Transaction.amount < 0, Transaction.execution_date >= prev_start_date, Transaction.execution_date <= prev_end_date)
+        prev_inc_q = db.query(func.sum(Transaction.amount)).filter(Transaction.amount > 0, Transaction.execution_date >= prev_start_date, Transaction.execution_date <= prev_end_date)
+        
+        if excluded_category_ids:
+            prev_exp_q = prev_exp_q.filter(Transaction.category_id.notin_(excluded_category_ids) | (Transaction.category_id == None))
+            prev_inc_q = prev_inc_q.filter(Transaction.category_id.notin_(excluded_category_ids) | (Transaction.category_id == None))
+
+        prev_exp = prev_exp_q.scalar()
         previous_total_expenses = abs(float(prev_exp)) if prev_exp else 0.0
         
-        prev_inc = db.query(func.sum(Transaction.amount)).filter(Transaction.amount > 0, Transaction.execution_date >= prev_start_date, Transaction.execution_date <= prev_end_date).scalar()
+        prev_inc = prev_inc_q.scalar()
         previous_total_income = float(prev_inc) if prev_inc else 0.0
         
     daily_expenses = []
@@ -143,7 +171,10 @@ def get_analytics_summary(month: Optional[str] = Query(None), db: Session = Depe
             Transaction.amount < 0,
             Transaction.execution_date >= start_date,
             Transaction.execution_date <= end_date
-        ).group_by(func.date(Transaction.execution_date)).all()
+        )
+        if excluded_category_ids:
+            exp_query = exp_query.filter(Transaction.category_id.notin_(excluded_category_ids) | (Transaction.category_id == None))
+        exp_query = exp_query.group_by(func.date(Transaction.execution_date)).all()
         for d, t in exp_query:
             daily_expenses.append({"date": str(d), "value": abs(float(t))})
             
@@ -157,7 +188,10 @@ def get_analytics_summary(month: Optional[str] = Query(None), db: Session = Depe
             Transaction.amount < 0,
             Transaction.execution_date >= start_date,
             Transaction.execution_date <= end_date
-        ).group_by(func.extract('day', Transaction.execution_date)).all()
+        )
+        if excluded_category_ids:
+            curr_query = curr_query.filter(Transaction.category_id.notin_(excluded_category_ids) | (Transaction.category_id == None))
+        curr_query = curr_query.group_by(func.extract('day', Transaction.execution_date)).all()
         curr_map = {int(d): abs(float(t)) for d, t in curr_query}
         prev_query = db.query(
             func.extract('day', Transaction.execution_date).label('day'),
@@ -166,7 +200,10 @@ def get_analytics_summary(month: Optional[str] = Query(None), db: Session = Depe
             Transaction.amount < 0,
             Transaction.execution_date >= prev_start_date,
             Transaction.execution_date <= prev_end_date
-        ).group_by(func.extract('day', Transaction.execution_date)).all()
+        )
+        if excluded_category_ids:
+            prev_query = prev_query.filter(Transaction.category_id.notin_(excluded_category_ids) | (Transaction.category_id == None))
+        prev_query = prev_query.group_by(func.extract('day', Transaction.execution_date)).all()
         prev_map = {int(d): abs(float(t)) for d, t in prev_query}
         
         curr_cum = 0.0
@@ -236,6 +273,7 @@ def get_analytics_summary(month: Optional[str] = Query(None), db: Session = Depe
 
 class ReportRequest(BaseModel):
     month: Optional[str] = None
+    exclude_transfers: bool = False
 
 @router.post("/report/telegram")
 def send_telegram_report(req: ReportRequest, db: Session = Depends(get_db)):
@@ -247,7 +285,7 @@ def send_telegram_report(req: ReportRequest, db: Session = Depends(get_db)):
     if not recipients:
         raise HTTPException(status_code=400, detail="No Telegram recipients configured. Please add them in Administration.")
         
-    data = get_analytics_summary(month=req.month, db=db)
+    data = get_analytics_summary(month=req.month, exclude_transfers=req.exclude_transfers, db=db)
     month_str = req.month if req.month else "All Time"
     
     total_spent = sum(item["value"] for item in data.get("category_spending", []))
@@ -325,6 +363,7 @@ def send_telegram_report(req: ReportRequest, db: Session = Depends(get_db)):
 def get_expense_report(
     month: Optional[str] = Query(None),
     category_ids: Optional[str] = Query(None),  # comma-separated list of category ids
+    exclude_transfers: bool = Query(False),
     db: Session = Depends(get_db),
 ):
     """Generate expense report filtered by month and/or specific categories."""
@@ -346,6 +385,14 @@ def get_expense_report(
         except ValueError:
             pass
 
+    excluded_category_ids = []
+    if exclude_transfers:
+        excluded_cats = db.query(Category.id).outerjoin(CategoryGroup, Category.group_id == CategoryGroup.id).filter(
+            (Category.name.in_(["Переводы", "Пополнения"])) |
+            (CategoryGroup.name.in_(["Переводы", "Пополнения"]))
+        ).all()
+        excluded_category_ids = [c[0] for c in excluded_cats]
+
     # Category spending (categorised transactions)
     from models import TransactionSplit
     cat_query = (
@@ -365,6 +412,9 @@ def get_expense_report(
             Transaction.execution_date >= start_date,
             Transaction.execution_date <= end_date,
         )
+
+    if excluded_category_ids:
+        cat_query = cat_query.filter(Category.id.notin_(excluded_category_ids))
 
     if cat_id_filter:
         cat_query = cat_query.filter(Category.id.in_(cat_id_filter))
@@ -416,7 +466,7 @@ def get_expense_report(
 
 
 @router.get("/payees")
-def get_top_payees(month: Optional[str] = Query(None), limit: int = 10, db: Session = Depends(get_db)):
+def get_top_payees(month: Optional[str] = Query(None), limit: int = 10, exclude_transfers: bool = Query(False), db: Session = Depends(get_db)):
     start_date, end_date = None, None
     if month:
         try:
@@ -432,6 +482,15 @@ def get_top_payees(month: Optional[str] = Query(None), limit: int = 10, db: Sess
         func.sum(Transaction.amount).label("total")
     ).filter(Transaction.amount < 0)
     
+    if exclude_transfers:
+        excluded_cats = db.query(Category.id).outerjoin(CategoryGroup, Category.group_id == CategoryGroup.id).filter(
+            (Category.name.in_(["Переводы", "Пополнения"])) |
+            (CategoryGroup.name.in_(["Переводы", "Пополнения"]))
+        ).all()
+        excluded_category_ids = [c[0] for c in excluded_cats]
+        if excluded_category_ids:
+            query = query.filter(Transaction.category_id.notin_(excluded_category_ids) | (Transaction.category_id == None))
+
     if start_date and end_date:
         query = query.filter(Transaction.execution_date >= start_date, Transaction.execution_date <= end_date)
         
@@ -440,8 +499,19 @@ def get_top_payees(month: Optional[str] = Query(None), limit: int = 10, db: Sess
     return [{"name": name, "value": abs(float(total))} for name, total in results if name]
 
 @router.get("/subscriptions")
-def get_subscriptions(db: Session = Depends(get_db)):
-    tx_list = db.query(Transaction.execution_date, Transaction.amount, Transaction.description).filter(Transaction.amount < 0).all()
+def get_subscriptions(exclude_transfers: bool = Query(False), db: Session = Depends(get_db)):
+    query = db.query(Transaction.execution_date, Transaction.amount, Transaction.description).filter(Transaction.amount < 0)
+    
+    if exclude_transfers:
+        excluded_cats = db.query(Category.id).outerjoin(CategoryGroup, Category.group_id == CategoryGroup.id).filter(
+            (Category.name.in_(["Переводы", "Пополнения"])) |
+            (CategoryGroup.name.in_(["Переводы", "Пополнения"]))
+        ).all()
+        excluded_category_ids = [c[0] for c in excluded_cats]
+        if excluded_category_ids:
+            query = query.filter(Transaction.category_id.notin_(excluded_category_ids) | (Transaction.category_id == None))
+
+    tx_list = query.all()
     if not tx_list:
         return []
         

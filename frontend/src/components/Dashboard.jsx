@@ -12,6 +12,7 @@ const Dashboard = () => {
 
   const [loading, setLoading] = useState(true);
   const [selectedMonth, setSelectedMonth] = useState('');
+  const [excludeTransfers, setExcludeTransfers] = useState(false);
   
   const [selectedPieSegment, setSelectedPieSegment] = useState(null);
 
@@ -48,10 +49,13 @@ const Dashboard = () => {
       setLoading(true);
       try {
         const params = selectedMonth ? { month: selectedMonth } : {};
+        if (excludeTransfers) {
+            params.exclude_transfers = true;
+        }
         const [resSum, resPayees, resSubs] = await Promise.all([
            api.get('/analytics/summary', { params }).catch(e => ({ data: null })),
            api.get('/analytics/payees', { params }).catch(e => ({ data: [] })),
-           api.get('/analytics/subscriptions').catch(e => ({ data: [] }))
+           api.get('/analytics/subscriptions', { params: excludeTransfers ? { exclude_transfers: true } : {} }).catch(e => ({ data: [] }))
         ]);
         setData(resSum.data);
         setPayees(resPayees.data || []);
@@ -63,7 +67,7 @@ const Dashboard = () => {
       }
     };
     fetchAnalytics();
-  }, [selectedMonth]);
+  }, [selectedMonth, excludeTransfers]);
 
   if (loading && !data) {
     return <div style={{ padding: '2rem', textAlign: 'center' }}>Loading Dashboard...</div>;
@@ -150,6 +154,7 @@ const Dashboard = () => {
       
       // Re-fetch analytics to perfectly reflect the change in charts & totals
       const params = selectedMonth ? { month: selectedMonth } : {};
+      if (excludeTransfers) params.exclude_transfers = true;
       api.get('/analytics/summary', { params })
          .then(res => setData(res.data))
          .catch(console.error);
@@ -295,7 +300,7 @@ const Dashboard = () => {
   const handleSendTelegramReport = async () => {
     setSendingReport(true);
     try {
-      const res = await api.post('/analytics/report/telegram', { month: selectedMonth });
+      const res = await api.post('/analytics/report/telegram', { month: selectedMonth, exclude_transfers: excludeTransfers });
       alert(res.data.message);
     } catch (err) {
       console.error(err);
@@ -363,6 +368,18 @@ const Dashboard = () => {
               </select>
             </div>
           )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', backgroundColor: 'var(--card-bg)', padding: '0.5rem 1rem', borderRadius: '0.5rem', border: '1px solid var(--border-color)' }}>
+             <input 
+               type="checkbox" 
+               id="exclude-transfers" 
+               checked={excludeTransfers} 
+               onChange={(e) => setExcludeTransfers(e.target.checked)} 
+               style={{ cursor: 'pointer' }}
+             />
+             <label htmlFor="exclude-transfers" style={{ fontSize: '0.875rem', cursor: 'pointer', userSelect: 'none', color: 'var(--text-main)' }}>
+               Только покупки (без переводов)
+             </label>
+          </div>
           <button 
              onClick={handleSendTelegramReport} 
              disabled={sendingReport}
