@@ -40,6 +40,8 @@ const Dashboard = () => {
   const [splitRows, setSplitRows] = useState([]); // [{category_id, category, amount, note}]
   const [savingSplits, setSavingSplits] = useState(false);
 
+  const [selectedChartCategories, setSelectedChartCategories] = useState([]);
+
   useEffect(() => {
     api.get('/categories').then(res => setCategories(res.data)).catch(console.error);
   }, []);
@@ -105,6 +107,18 @@ const Dashboard = () => {
     } finally {
       setLoadingCategory(false);
     }
+  };
+
+  const handleChartCategoryClick = (categoryName) => {
+    setSelectedChartCategories(prev => {
+        if (prev.length === 0) {
+            return [categoryName];
+        }
+        if (prev.includes(categoryName)) {
+            return prev.filter(c => c !== categoryName);
+        }
+        return [...prev, categoryName];
+    });
   };
 
   const handleDayClick = async (day) => {
@@ -587,26 +601,30 @@ const Dashboard = () => {
                     <Legend 
                       onClick={(props) => {
                         if (props && props.dataKey) {
-                          handleCategoryClick(props.dataKey);
+                          handleChartCategoryClick(props.dataKey);
                         } else if (props && props.value) {
-                          handleCategoryClick(props.value);
+                          handleChartCategoryClick(props.value);
                         }
                       }}
                       wrapperStyle={{ cursor: 'pointer' }}
                     />
-                    {data.cumulative_spending_categories.map((cat, index) => (
-                       <Area 
-                         key={cat}
-                         type="monotone" 
-                         dataKey={cat} 
-                         stackId="1" 
-                         stroke={COLORS[index % COLORS.length]} 
-                         fill={COLORS[index % COLORS.length]} 
-                         activeDot={false}
-                         onClick={() => handleCategoryClick(cat)}
-                         style={{ cursor: 'pointer' }}
-                       />
-                    ))}
+                    {data.cumulative_spending_categories.map((cat, index) => {
+                       const isVisible = selectedChartCategories.length === 0 || selectedChartCategories.includes(cat);
+                       return (
+                         <Area 
+                           key={cat}
+                           type="monotone" 
+                           dataKey={cat} 
+                           stackId="1" 
+                           stroke={COLORS[index % COLORS.length]} 
+                           fill={COLORS[index % COLORS.length]} 
+                           activeDot={false}
+                           hide={!isVisible}
+                           onClick={() => handleChartCategoryClick(cat)}
+                           style={{ cursor: 'pointer' }}
+                         />
+                       );
+                    })}
                   </AreaChart>
                 </ResponsiveContainer>
               ) : (
