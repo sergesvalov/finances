@@ -52,6 +52,7 @@ def get_analytics_summary(month: Optional[str] = Query(None), exclude_transfers:
          
     df_all = pd.DataFrame([{"date": t.execution_date} for t in all_transactions])
     available_months = sorted(df_all['date'].dt.strftime('%Y-%m').unique().tolist(), reverse=True)
+    available_weeks = sorted(df_all['date'].dt.strftime('%G-W%V').unique().tolist(), reverse=True)
     
     # Balance dynamics for the selected period
     tx_query = db.query(Transaction.execution_date, Transaction.balance).order_by(Transaction.execution_date.asc())
@@ -321,6 +322,7 @@ def get_analytics_summary(month: Optional[str] = Query(None), exclude_transfers:
 
     return {
         "available_months": available_months,
+        "available_weeks": available_weeks,
         "category_spending": category_spending,
         "balance_dynamics": balance_dynamics,
         "total_income": float(total_income),
@@ -422,6 +424,140 @@ def send_telegram_report(req: ReportRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Failed to send report. Error: {last_error}")
         
     return {"message": f"Report successfully sent to {success_count} recipients."}
+
+@router.get("/daily_category_comparison")
+def get_daily_category_comparison(
+    months: Optional[str] = Query(None), # comma-separated list of YYYY-MM
+    exclude_transfers: bool = Query(False),
+    db: Session = Depends(get_db)
+):
+    if not months:
+        return {"data": [], "categories": []}
+        
+    months_list = [m.strip() for m in months.split(',') if m.strip()]
+    
+    excluded_category_ids = []
+    if exclude_transfers:
+        excluded_cats = db.query(Category.id).outerjoin(CategoryGroup, Category.group_id == CategoryGroup.id).filter(
+            (Category.name.in_(["Переводы", "Перевод", "Пополнения", "Пополнение"])) |
+            (CategoryGroup.name.in_(["Переводы", "Перевод", "Пополнения", "Пополнение"]))
+        ).all()
+        excluded_category_ids = [c[0] for c in excluded_cats]
+
+    days_data = {d: {"day": d} for d in range(1, 32)}
+    all_cat_month_keys = set()
+    raw_categories = set()
+    
+    for month in months_list:
+        try:
+            year, m = map(int, month.split('-'))
+            last_day = calendar.monthrange(year, m)[1]
+            start_date = datetime(year, m, 1)
+            end_date = datetime(year, m, last_day, 23, 59, 59)
+            
+            query = db.query(
+                func.extract('day', Transaction.execution_date).label('day'),
+                Category.name.label('category_name'),
+                func.sum(Transaction.amount).label('total')
+            ).outerjoin(Category, Transaction.category_id == Category.id) \
+             .filter(
+                Transaction.amount < 0,
+                Transaction.execution_date >= start_date,
+                Transaction.execution_date <= end_date
+            )
+            
+            if excluded_category_ids:
+                query = query.filter(Transaction.category_id.notin_(excluded_category_ids) | (Transaction.category_id == None))
+                
+            results = query.group_by(func.extract('day', Transaction.execution_date), Category.name).all()
+            
+            for d, c_name, t in results:
+                day = int(d)
+                cat_name = c_name or "Без категории"
+                key = f"{month}::{cat_name}" 
+                all_cat_month_keys.add(key)
+                raw_categories.add(cat_name)
+                days_data[day][key] = abs(float(t))
+                
+        except ValueError:
+            continue
+            
+    data = [days_data[d] for d in range(1, 32)]
+    
+    return {
+        "data": data,
+        "line_keys": list(all_cat_month_keys),
+        "categories": list(raw_categories)
+    }
+
+@router.get("/weekly_category_comparison")
+def get_weekly_category_comparison(
+    weeks: Optional[str] = Query(None), # comma-separated list of YYYY-Wxx
+    exclude_transfers: bool = Query(False),
+    db: Session = Depends(get_db)
+):
+    if not weeks:
+        return {"data": [], "categories": []}
+        
+    weeks_list = [w.strip() for w in weeks.split(',') if w.strip()]
+    
+    excluded_category_ids = []
+    if exclude_transfers:
+        excluded_cats = db.query(Category.id).outerjoin(CategoryGroup, Category.group_id == CategoryGroup.id).filter(
+            (Category.name.in_(["Переводы", "Перевод", "Пополнения", "Пополнение"])) |
+            (CategoryGroup.name.in_(["Переводы", "Перевод", "Пополнения", "Пополнение"]))
+        ).all()
+        excluded_category_ids = [c[0] for c in excluded_cats]
+
+    days_data = {d: {"day": d} for d in range(1, 8)}
+    all_cat_week_keys = set()
+    raw_categories = set()
+    
+    for week_str in weeks_list:
+        try:
+            # Parse ISO week, e.g., "2026-W15"
+            year_str, week_num_str = week_str.split('-W')
+            year = int(year_str)
+            week_num = int(week_num_str)
+            
+            start_date = datetime.strptime(f'{year} {week_num} 1', '%G %V %u')
+            end_date = datetime.strptime(f'{year} {week_num} 7', '%G %V %u').replace(hour=23, minute=59, second=59)
+            
+            query = db.query(
+                func.extract('isodow', Transaction.execution_date).label('day'),
+                Category.name.label('category_name'),
+                func.sum(Transaction.amount).label('total')
+            ).outerjoin(Category, Transaction.category_id == Category.id) \
+             .filter(
+                Transaction.amount < 0,
+                Transaction.execution_date >= start_date,
+                Transaction.execution_date <= end_date
+            )
+            
+            if excluded_category_ids:
+                query = query.filter(Transaction.category_id.notin_(excluded_category_ids) | (Transaction.category_id == None))
+                
+            results = query.group_by(func.extract('isodow', Transaction.execution_date), Category.name).all()
+            
+            for d, c_name, t in results:
+                day = int(d)
+                cat_name = c_name or "Без категории"
+                key = f"{week_str}::{cat_name}" 
+                all_cat_week_keys.add(key)
+                raw_categories.add(cat_name)
+                days_data[day][key] = abs(float(t))
+                
+        except Exception:
+            continue
+            
+    data = [days_data[d] for d in range(1, 8)]
+    
+    return {
+        "data": data,
+        "line_keys": list(all_cat_week_keys),
+        "categories": list(raw_categories)
+    }
+
 
 @router.get("/expense-report")
 def get_expense_report(

@@ -42,6 +42,22 @@ const Dashboard = () => {
 
   const [selectedChartCategories, setSelectedChartCategories] = useState([]);
 
+  // Multi-month comparison state
+  const [comparisonMonths, setComparisonMonths] = useState([]);
+  const [comparisonData, setComparisonData] = useState([]);
+  const [comparisonLineKeys, setComparisonLineKeys] = useState([]);
+  const [comparisonCategories, setComparisonCategories] = useState([]);
+  const [selectedComparisonCategories, setSelectedComparisonCategories] = useState([]);
+  const [loadingComparison, setLoadingComparison] = useState(false);
+
+  // Multi-week comparison state
+  const [comparisonWeeks, setComparisonWeeks] = useState([]);
+  const [weeklyComparisonData, setWeeklyComparisonData] = useState([]);
+  const [weeklyComparisonLineKeys, setWeeklyComparisonLineKeys] = useState([]);
+  const [weeklyComparisonCategories, setWeeklyComparisonCategories] = useState([]);
+  const [selectedWeeklyComparisonCategories, setSelectedWeeklyComparisonCategories] = useState([]);
+  const [loadingWeeklyComparison, setLoadingWeeklyComparison] = useState(false);
+
   useEffect(() => {
     api.get('/categories').then(res => setCategories(res.data)).catch(console.error);
   }, []);
@@ -62,6 +78,13 @@ const Dashboard = () => {
         setData(resSum.data);
         setPayees(resPayees.data || []);
         setSubscriptions(resSubs.data || []);
+        
+        if (comparisonMonths.length === 0 && resSum.data?.available_months?.length > 0) {
+            setComparisonMonths([resSum.data.available_months[0]]);
+        }
+        if (comparisonWeeks.length === 0 && resSum.data?.available_weeks?.length > 0) {
+            setComparisonWeeks([resSum.data.available_weeks[0]]);
+        }
       } catch (err) {
         console.error("Failed to fetch analytics:", err);
       } finally {
@@ -70,6 +93,52 @@ const Dashboard = () => {
     };
     fetchAnalytics();
   }, [selectedMonth, excludeTransfers]);
+
+  useEffect(() => {
+    if (comparisonMonths.length === 0) {
+      setComparisonData([]);
+      return;
+    }
+    const fetchComparison = async () => {
+      setLoadingComparison(true);
+      try {
+        const params = { months: comparisonMonths.join(',') };
+        if (excludeTransfers) params.exclude_transfers = true;
+        const res = await api.get('/analytics/daily_category_comparison', { params });
+        setComparisonData(res.data.data);
+        setComparisonLineKeys(res.data.line_keys);
+        setComparisonCategories(res.data.categories);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoadingComparison(false);
+      }
+    };
+    fetchComparison();
+  }, [comparisonMonths, excludeTransfers]);
+
+  useEffect(() => {
+    if (comparisonWeeks.length === 0) {
+      setWeeklyComparisonData([]);
+      return;
+    }
+    const fetchWeeklyComparison = async () => {
+      setLoadingWeeklyComparison(true);
+      try {
+        const params = { weeks: comparisonWeeks.join(',') };
+        if (excludeTransfers) params.exclude_transfers = true;
+        const res = await api.get('/analytics/weekly_category_comparison', { params });
+        setWeeklyComparisonData(res.data.data);
+        setWeeklyComparisonLineKeys(res.data.line_keys);
+        setWeeklyComparisonCategories(res.data.categories);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoadingWeeklyComparison(false);
+      }
+    };
+    fetchWeeklyComparison();
+  }, [comparisonWeeks, excludeTransfers]);
 
   if (loading && !data) {
     return <div style={{ padding: '2rem', textAlign: 'center' }}>Loading Dashboard...</div>;
@@ -629,6 +698,195 @@ const Dashboard = () => {
                 </ResponsiveContainer>
               ) : (
                 <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', color: 'var(--text-muted)' }}>Not enough data</div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Row 2.75: Daily Multi-Month Comparison */}
+        <div className="dashboard-grid" style={{ gridTemplateColumns: '1fr', marginTop: '1.5rem' }}>
+          <div className="card chart-card" style={{ height: '500px', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.5rem' }}>
+              <h3 style={{ margin: 0 }}>Daily Multi-Month Category Comparison</h3>
+              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', maxWidth: '50%', justifyContent: 'flex-end' }}>
+                {data?.available_months?.map(m => (
+                  <button
+                    key={m}
+                    className={`btn ${comparisonMonths.includes(m) ? 'btn-primary' : 'btn-secondary'}`}
+                    style={{ padding: '0.25rem 0.75rem', fontSize: '0.75rem' }}
+                    onClick={() => setComparisonMonths(prev => 
+                      prev.includes(m) ? prev.filter(x => x !== m) : [...prev, m].sort((a,b) => b.localeCompare(a))
+                    )}
+                  >
+                    {m}
+                  </button>
+                ))}
+              </div>
+            </div>
+            
+            <div style={{ flex: 1, minHeight: 0 }}>
+              {loadingComparison ? (
+                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', color: 'var(--text-muted)' }}>Loading comparison...</div>
+              ) : comparisonData && comparisonData.length > 0 && comparisonLineKeys ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={comparisonData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" vertical={false} />
+                    <XAxis dataKey="day" stroke="var(--text-muted)" fontSize={12} tickMargin={10} />
+                    <YAxis stroke="var(--text-muted)" fontSize={12} tickFormatter={(value) => `€${value}`} />
+                    <RechartsTooltip 
+                      formatter={(value) => `€${value.toFixed(2)}`} 
+                      contentStyle={{ backgroundColor: 'var(--card-bg)', borderColor: 'var(--border-color)', borderRadius: '0.5rem' }} 
+                      itemStyle={{ color: 'var(--text-main)' }}
+                      labelFormatter={(label) => `Day ${label}`}
+                    />
+                    <Legend 
+                      onClick={(props) => {
+                        if (props && props.dataKey) {
+                          const catName = props.dataKey.includes('::') ? props.dataKey.split('::')[1] : props.dataKey;
+                          setSelectedComparisonCategories(prev => {
+                            if (prev.length === 0) return [catName];
+                            if (prev.includes(catName)) return prev.filter(c => c !== catName);
+                            return [...prev, catName];
+                          });
+                        }
+                      }}
+                      wrapperStyle={{ cursor: 'pointer' }}
+                    />
+                    {comparisonLineKeys.map((key, index) => {
+                       const catName = key.includes('::') ? key.split('::')[1] : key;
+                       const isVisible = selectedComparisonCategories.length === 0 || selectedComparisonCategories.includes(catName);
+                       
+                       const catIndex = comparisonCategories.indexOf(catName);
+                       const color = COLORS[Math.max(0, catIndex) % COLORS.length];
+                       
+                       const month = key.includes('::') ? key.split('::')[0] : '';
+                       const monthIndex = comparisonMonths.indexOf(month);
+                       const strokeDasharray = monthIndex === 0 ? undefined : monthIndex === 1 ? "5 5" : "3 3";
+                       
+                       return (
+                         <Line 
+                           key={key}
+                           type="monotone" 
+                           dataKey={key} 
+                           name={`${month} ${catName}`}
+                           stroke={color} 
+                           strokeWidth={monthIndex === 0 ? 3 : 2}
+                           strokeDasharray={strokeDasharray}
+                           dot={false}
+                           activeDot={{ r: 4 }}
+                           hide={!isVisible}
+                         />
+                       );
+                    })}
+                  </LineChart>
+                </ResponsiveContainer>
+              ) : (
+                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', color: 'var(--text-muted)' }}>Select months to compare</div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Row 2.85: Daily Multi-Week Comparison */}
+        <div className="dashboard-grid" style={{ gridTemplateColumns: '1fr', marginTop: '1.5rem' }}>
+          <div className="card chart-card" style={{ height: '500px', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.5rem' }}>
+              <h3 style={{ margin: 0 }}>Daily Multi-Week Category Comparison</h3>
+              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', maxWidth: '50%', justifyContent: 'flex-end', alignItems: 'center' }}>
+                <select 
+                  className="input" 
+                  style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', width: 'auto' }}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val && !comparisonWeeks.includes(val)) {
+                      setComparisonWeeks(prev => [...prev, val].sort((a,b) => b.localeCompare(a)));
+                    }
+                    e.target.value = '';
+                  }}
+                  defaultValue=""
+                >
+                  <option value="" disabled>Add week...</option>
+                  {data?.available_weeks?.filter(w => !comparisonWeeks.includes(w)).map(w => (
+                    <option key={w} value={w}>{w}</option>
+                  ))}
+                </select>
+                {comparisonWeeks.map(w => (
+                  <button
+                    key={w}
+                    className="btn btn-primary"
+                    style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
+                    onClick={() => setComparisonWeeks(prev => prev.filter(x => x !== w))}
+                  >
+                    {w} <X size={12} />
+                  </button>
+                ))}
+              </div>
+            </div>
+            
+            <div style={{ flex: 1, minHeight: 0 }}>
+              {loadingWeeklyComparison ? (
+                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', color: 'var(--text-muted)' }}>Loading comparison...</div>
+              ) : weeklyComparisonData && weeklyComparisonData.length > 0 && weeklyComparisonLineKeys ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={weeklyComparisonData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" vertical={false} />
+                    <XAxis 
+                      dataKey="day" 
+                      stroke="var(--text-muted)" 
+                      fontSize={12} 
+                      tickMargin={10} 
+                      tickFormatter={(day) => ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][day - 1] || day}
+                    />
+                    <YAxis stroke="var(--text-muted)" fontSize={12} tickFormatter={(value) => `€${value}`} />
+                    <RechartsTooltip 
+                      formatter={(value) => `€${value.toFixed(2)}`} 
+                      contentStyle={{ backgroundColor: 'var(--card-bg)', borderColor: 'var(--border-color)', borderRadius: '0.5rem' }} 
+                      itemStyle={{ color: 'var(--text-main)' }}
+                      labelFormatter={(day) => ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'][day - 1] || `Day ${day}`}
+                    />
+                    <Legend 
+                      onClick={(props) => {
+                        if (props && props.dataKey) {
+                          const catName = props.dataKey.includes('::') ? props.dataKey.split('::')[1] : props.dataKey;
+                          setSelectedWeeklyComparisonCategories(prev => {
+                            if (prev.length === 0) return [catName];
+                            if (prev.includes(catName)) return prev.filter(c => c !== catName);
+                            return [...prev, catName];
+                          });
+                        }
+                      }}
+                      wrapperStyle={{ cursor: 'pointer' }}
+                    />
+                    {weeklyComparisonLineKeys.map((key, index) => {
+                       const catName = key.includes('::') ? key.split('::')[1] : key;
+                       const isVisible = selectedWeeklyComparisonCategories.length === 0 || selectedWeeklyComparisonCategories.includes(catName);
+                       
+                       const catIndex = weeklyComparisonCategories.indexOf(catName);
+                       const color = COLORS[Math.max(0, catIndex) % COLORS.length];
+                       
+                       const week = key.includes('::') ? key.split('::')[0] : '';
+                       const weekIndex = comparisonWeeks.indexOf(week);
+                       const strokeDasharray = weekIndex === 0 ? undefined : weekIndex === 1 ? "5 5" : "3 3";
+                       
+                       return (
+                         <Line 
+                           key={key}
+                           type="monotone" 
+                           dataKey={key} 
+                           name={`${week} ${catName}`}
+                           stroke={color} 
+                           strokeWidth={weekIndex === 0 ? 3 : 2}
+                           strokeDasharray={strokeDasharray}
+                           dot={false}
+                           activeDot={{ r: 4 }}
+                           hide={!isVisible}
+                         />
+                       );
+                    })}
+                  </LineChart>
+                </ResponsiveContainer>
+              ) : (
+                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', color: 'var(--text-muted)' }}>Select weeks to compare</div>
               )}
             </div>
           </div>
