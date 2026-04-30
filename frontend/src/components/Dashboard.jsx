@@ -584,7 +584,16 @@ const Dashboard = () => {
                       contentStyle={{ backgroundColor: 'var(--card-bg)', borderColor: 'var(--border-color)', borderRadius: '0.5rem' }} 
                       itemStyle={{ color: 'var(--text-main)' }}
                     />
-                    <Legend />
+                    <Legend 
+                      onClick={(props) => {
+                        if (props && props.dataKey) {
+                          handleCategoryClick(props.dataKey);
+                        } else if (props && props.value) {
+                          handleCategoryClick(props.value);
+                        }
+                      }}
+                      wrapperStyle={{ cursor: 'pointer' }}
+                    />
                     {data.cumulative_spending_categories.map((cat, index) => (
                        <Area 
                          key={cat}
@@ -594,6 +603,8 @@ const Dashboard = () => {
                          stroke={COLORS[index % COLORS.length]} 
                          fill={COLORS[index % COLORS.length]} 
                          activeDot={false}
+                         onClick={() => handleCategoryClick(cat)}
+                         style={{ cursor: 'pointer' }}
                        />
                     ))}
                   </AreaChart>
