@@ -6,7 +6,7 @@ import uuid
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from database import get_db
-from models import Transaction, Category, Tag, TransactionSplit
+from models import Transaction, Category, Tag, TransactionSplit, CategoryGroup
 from schemas import Transaction as TransactionSchema
 from pydantic import BaseModel
 
@@ -53,9 +53,19 @@ def get_transactions(
     tag: Optional[str] = None,
     month: Optional[str] = None,
     date: Optional[str] = None,
+    exclude_transfers: bool = Query(False),
     db: Session = Depends(get_db)
 ):
     query = db.query(Transaction)
+
+    if exclude_transfers:
+        excluded_cats = db.query(Category.id).outerjoin(CategoryGroup, Category.group_id == CategoryGroup.id).filter(
+            (Category.name.in_(["Переводы", "Перевод", "Пополнения", "Пополнение"])) |
+            (CategoryGroup.name.in_(["Переводы", "Перевод", "Пополнения", "Пополнение"]))
+        ).all()
+        excluded_category_ids = [c[0] for c in excluded_cats]
+        if excluded_category_ids:
+            query = query.filter(Transaction.category_id.notin_(excluded_category_ids) | (Transaction.category_id == None))
 
     if search:
         query = query.filter(Transaction.description.ilike(f"%{search}%"))

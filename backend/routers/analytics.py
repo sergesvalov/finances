@@ -33,13 +33,13 @@ def get_analytics_summary(month: Optional[str] = Query(None), exclude_transfers:
         except ValueError:
             pass
 
-    excluded_category_ids = []
-    if exclude_transfers:
-        excluded_cats = db.query(Category.id).outerjoin(CategoryGroup, Category.group_id == CategoryGroup.id).filter(
-            (Category.name.in_(["Переводы", "Перевод", "Пополнения", "Пополнение"])) |
-            (CategoryGroup.name.in_(["Переводы", "Перевод", "Пополнения", "Пополнение"]))
-        ).all()
-        excluded_category_ids = [c[0] for c in excluded_cats]
+    transfer_cats = db.query(Category.id).outerjoin(CategoryGroup, Category.group_id == CategoryGroup.id).filter(
+        (Category.name.in_(["Переводы", "Перевод", "Пополнения", "Пополнение"])) |
+        (CategoryGroup.name.in_(["Переводы", "Перевод", "Пополнения", "Пополнение"]))
+    ).all()
+    transfer_category_ids = [c[0] for c in transfer_cats]
+
+    excluded_category_ids = transfer_category_ids if exclude_transfers else []
 
     # We need all transactions to get available_months and basic filtering
     all_transactions = db.query(Transaction.execution_date).order_by(Transaction.execution_date.asc())
@@ -200,8 +200,8 @@ def get_analytics_summary(month: Optional[str] = Query(None), exclude_transfers:
             Transaction.execution_date >= start_date,
             Transaction.execution_date <= end_date
         )
-        if excluded_category_ids:
-            curr_query = curr_query.filter(Transaction.category_id.notin_(excluded_category_ids) | (Transaction.category_id == None))
+        if transfer_category_ids:
+            curr_query = curr_query.filter(Transaction.category_id.notin_(transfer_category_ids) | (Transaction.category_id == None))
         curr_query = curr_query.group_by(func.extract('day', Transaction.execution_date)).all()
         curr_map = {int(d): abs(float(t)) for d, t in curr_query}
         prev_query = db.query(
@@ -212,8 +212,8 @@ def get_analytics_summary(month: Optional[str] = Query(None), exclude_transfers:
             Transaction.execution_date >= prev_start_date,
             Transaction.execution_date <= prev_end_date
         )
-        if excluded_category_ids:
-            prev_query = prev_query.filter(Transaction.category_id.notin_(excluded_category_ids) | (Transaction.category_id == None))
+        if transfer_category_ids:
+            prev_query = prev_query.filter(Transaction.category_id.notin_(transfer_category_ids) | (Transaction.category_id == None))
         prev_query = prev_query.group_by(func.extract('day', Transaction.execution_date)).all()
         prev_map = {int(d): abs(float(t)) for d, t in prev_query}
         

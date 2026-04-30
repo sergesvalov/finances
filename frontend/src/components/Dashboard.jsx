@@ -97,6 +97,7 @@ const Dashboard = () => {
     try {
       const params = { category: categoryName, limit: 100 };
       if (selectedMonth) params.month = selectedMonth;
+      if (excludeTransfers) params.exclude_transfers = true;
       const res = await api.get('/transactions', { params });
       setCategoryTransactions(res.data.items);
     } catch (err) {
@@ -121,7 +122,9 @@ const Dashboard = () => {
     }, 50);
 
     try {
-      const res = await api.get('/transactions', { params: { date: dateStr, limit: 100 } });
+      const params = { date: dateStr, limit: 100 };
+      if (excludeTransfers) params.exclude_transfers = true;
+      const res = await api.get('/transactions', { params });
       setDateTransactions(res.data.items);
     } catch (err) {
       console.error(err);
