@@ -234,6 +234,56 @@ def get_analytics_summary(month: Optional[str] = Query(None), exclude_transfers:
                 item["current"] = curr_cum
             cumulative_spending.append(item)
             
+    cumulative_category_spending = []
+    cumulative_spending_categories = []
+    if start_date and end_date:
+        days_in_month = (end_date - start_date).days + 1
+        
+        cat_day_query = db.query(
+            func.extract('day', Transaction.execution_date).label('day'),
+            Category.name.label('category_name'),
+            func.sum(Transaction.amount).label('total')
+        ).outerjoin(Category, Transaction.category_id == Category.id) \
+         .filter(
+            Transaction.amount < 0,
+            Transaction.execution_date >= start_date,
+            Transaction.execution_date <= end_date
+        )
+        if transfer_category_ids:
+            cat_day_query = cat_day_query.filter(Transaction.category_id.notin_(transfer_category_ids) | (Transaction.category_id == None))
+            
+        cat_day_query = cat_day_query.group_by(func.extract('day', Transaction.execution_date), Category.name).all()
+        
+        day_cat_map = {}
+        all_cats_set = set()
+        for d, c_name, t in cat_day_query:
+            day = int(d)
+            cat = c_name or "Без категории"
+            all_cats_set.add(cat)
+            if day not in day_cat_map:
+                day_cat_map[day] = {}
+            day_cat_map[day][cat] = abs(float(t))
+            
+        running_sums = {cat: 0.0 for cat in all_cats_set}
+        
+        today_day = None
+        now = datetime.now()
+        if start_date.year == now.year and start_date.month == now.month:
+            today_day = now.day
+            
+        for day in range(1, days_in_month + 1):
+            if today_day is not None and day > today_day:
+                break
+                
+            day_data = day_cat_map.get(day, {})
+            item = {"day": day}
+            for cat in all_cats_set:
+                running_sums[cat] += day_data.get(cat, 0.0)
+                item[cat] = running_sums[cat]
+            cumulative_category_spending.append(item)
+            
+        cumulative_spending_categories = list(all_cats_set)
+            
     nodes = []
     links = []
     node_idx = {}
@@ -278,6 +328,8 @@ def get_analytics_summary(month: Optional[str] = Query(None), exclude_transfers:
         "previous_total_income": previous_total_income,
         "daily_expenses": daily_expenses,
         "cumulative_spending": cumulative_spending,
+        "cumulative_category_spending": cumulative_category_spending,
+        "cumulative_spending_categories": cumulative_spending_categories,
         "sankey_data": sankey_data,
         "income_expenses_dynamics": income_expenses_dynamics
     }

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Legend, Sankey } from 'recharts';
+import { PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Legend, Sankey, AreaChart, Area } from 'recharts';
 import { ArrowUpRight, ArrowDownRight, Wallet, Calendar, X, Send, Paperclip, Trash2, Upload, FileText, SplitSquareHorizontal, Plus, Save } from 'lucide-react';
 import api from '../api';
 
@@ -560,6 +560,43 @@ const Dashboard = () => {
                     <Line type="monotone" name="Previous Month" dataKey="previous" stroke="var(--text-muted)" strokeWidth={2} strokeDasharray="5 5" dot={false} />
                     <Legend />
                   </LineChart>
+                </ResponsiveContainer>
+              ) : (
+                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', color: 'var(--text-muted)' }}>Not enough data</div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Row 2.5: Cumulative by Category */}
+        <div className="dashboard-grid" style={{ gridTemplateColumns: '1fr', marginTop: '1.5rem' }}>
+          <div className="card chart-card" style={{ height: '400px' }}>
+            <h3 style={{ marginBottom: '1.5rem' }}>Cumulative Spending by Category</h3>
+            <div style={{ flex: 1, minHeight: 0 }}>
+              {data.cumulative_category_spending && data.cumulative_category_spending.length > 0 && data.cumulative_spending_categories ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={data.cumulative_category_spending} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" vertical={false} />
+                    <XAxis dataKey="day" stroke="var(--text-muted)" fontSize={12} tickMargin={10} />
+                    <YAxis stroke="var(--text-muted)" fontSize={12} tickFormatter={(value) => `€${value}`} />
+                    <RechartsTooltip 
+                      formatter={(value) => `€${value.toFixed(2)}`} 
+                      contentStyle={{ backgroundColor: 'var(--card-bg)', borderColor: 'var(--border-color)', borderRadius: '0.5rem' }} 
+                      itemStyle={{ color: 'var(--text-main)' }}
+                    />
+                    <Legend />
+                    {data.cumulative_spending_categories.map((cat, index) => (
+                       <Area 
+                         key={cat}
+                         type="monotone" 
+                         dataKey={cat} 
+                         stackId="1" 
+                         stroke={COLORS[index % COLORS.length]} 
+                         fill={COLORS[index % COLORS.length]} 
+                         activeDot={false}
+                       />
+                    ))}
+                  </AreaChart>
                 </ResponsiveContainer>
               ) : (
                 <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', color: 'var(--text-muted)' }}>Not enough data</div>
