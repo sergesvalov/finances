@@ -5,11 +5,11 @@ pipeline {
         // === CONFIGURATION ===
         
         // 1. Registry Settings
-        REGISTRY_IP   = "192.168.10.222" 
+        REGISTRY_IP   = "192.168.0.222" 
         REGISTRY_PORT = "5050"
         
         // 2. Deployment Server Settings
-        DEPLOY_SERVER_IP = "192.168.10.223"
+        DEPLOY_SERVER_IP = "192.168.0.223"
         
         // 3. Git Repository Settings
         GIT_REPO_URL  = "git@github.com:sergesvalov/finances.git"
